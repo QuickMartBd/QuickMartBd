@@ -1,0 +1,81 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Super App</title></head><body>
+<div id=top></div><div id=auth></div><div id=main></div>
+<script type=module>
+import { brandHeader, sb, $, esc, t, toggleLang, me, authBox, getFees, upload, css } from './app.js';
+document.head.insertAdjacentHTML('beforeend', css);
+document.body.insertAdjacentHTML('afterbegin', brandHeader(''));
+let user, tab = 'local', q = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || '';
+const save = () => localStorage.cart = JSON.stringify(cart);
+async function init() {
+  user = await me(); fees = await getFees();
+  zones = (await sb.from('delivery_zones').select('*')).data || [];
+  if (!area && zones[0]) area = zones[0].area;
+  $('#top').innerHTML = `<div class=bar><select id=ar>${zones.map(z => `<option ${z.area===area?'selected':''}>${esc(z.area)}</option>`).join('')}</select>
+  <button id=gps>📍</button><button id=lg>EN/বাং</button>${user ? `<button id=lo>${t('logout')}</button>` : `<button id=li>${t('login')}</button>`}</div>
+  <div class=bar><input id=q placeholder="${t('search')}" style="flex:1"><button id=vs>🎤</button><button id=sb>${t('search')}</button></div>
+  <div class=bar>${['local','all','offers'].map(x => `<button data-t=${x}>${t(x)}</button>`).join('')}<button id=ords>${t('orders')}</button><button id=cb>${t('cart')} (${cart.length})</button></div>`;
+  $('#ar').onchange = e => { area = e.target.value; localStorage.area = area; load(); };
+  $('#lg').onclick = toggleLang;
+  if ($('#lo')) $('#lo').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+  if ($('#li')) $('#li').onclick = () => authBox($('#auth'), 'customer', () => location.reload());
+  $('#gps').onclick = () => navigator.geolocation?.getCurrentPosition(async p => {
+    try { const r = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${p.coords.latitude}&lon=${p.coords.longitude}`)).json();
+      const txt = JSON.stringify(r.address || {}).toLowerCase(); const hit = zones.find(z => txt.includes(z.area.toLowerCase()));
+      if (hit) { area = hit.area; localStorage.area = area; $('#ar').value = area; load(); } else alert('Area not served yet'); } catch { alert('Could not detect'); } });
+  $('#sb').onclick = () => { q = $('#q').value; load(); };
+  $('#vs').onclick = () => { const R = window.SpeechRecognition || window.webkitSpeechRecognition; if (!R) return alert('Voice not supported');
+    const r = new R(); r.lang = localStorage.lang === 'bn' ? 'bn-BD' : 'en-US'; r.onresult = e => { $('#q').value = e.results[0][0].transcript; q = $('#q').value; load(); }; r.start(); };
+  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; load(); });
+  $('#cb').onclick = showCart; $('#ords').onclick = showOrders;
+  load();
+}
+async function load() {
+  let qq = sb.from('products').select('*, shops!inner(name,area,verified)').eq('shops.verified', true);
+  if (tab === 'local') qq = qq.eq('scope', 'local').eq('shops.area', area);
+  if (tab === 'all') qq = qq.eq('scope', 'all');
+  if (tab === 'offers') qq = qq.not('offer_price', 'is', null);
+  if (q) qq = qq.ilike('name', `%${q}%`);
+  const { data = [] } = await qq.order('created_at', { ascending: false });
+  $('#main').innerHTML = `<div class=g>${data.map(p => `<div class=c>${p.image_url ? `<img src="${esc(p.image_url)}">` : ''}<b>${esc(p.name)}</b><br><small>${esc(p.shops.name)} · ${esc(p.category)}</small>
+  <p>${p.offer_price ? `<s>৳${p.price}</s> <b>৳${p.offer_price}</b>` : `৳${p.price}`}</p><small>${esc(p.description)}</small><br>
+  ${p.in_stock ? `<button data-a='${p.id}'>${t('add')}</button>` : `<b style=color:red>${t('soldout')}</b>`}<button data-r='${p.id}'>★ Reviews</button></div>`).join('') || '<p>No products</p>'}</div>`;
+  document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const p = data.find(x => x.id === b.dataset.a);
+    const i = cart.find(x => x.id === p.id); i ? i.qty++ : cart.push({ id: p.id, name: p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 });
+    save(); $('#cb').textContent = `${t('cart')} (${cart.length})`; });
+  document.querySelectorAll('[data-r]').forEach(b => b.onclick = () => reviews(b.dataset.r));
+}
+async function reviews(pid) {
+  const { data = [] } = await sb.from('reviews').select('*').eq('product_id', pid).order('created_at', { ascending: false });
+  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>Reviews</h3>${data.map(r => `<div class=c>${'★'.repeat(r.rating)}<br>${esc(r.comment)}${r.photo_url ? `<br><img src="${esc(r.photo_url)}" style=max-width:120px>` : ''}</div>`).join('') || '<p>No reviews</p>'}
+  ${user ? `<h4>Write review</h4><select id=rt><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select><textarea id=rc></textarea><input id=rp type=file accept=image/*><button id=rs>Submit</button>` : '<p>Login to review</p>'}`;
+  if (user) $('#rs').onclick = async () => { let photo_url = null; const f = $('#rp').files[0]; if (f) photo_url = await upload(f, 'reviews');
+    const { error } = await sb.from('reviews').insert({ product_id: pid, customer: user.id, rating: +$('#rt').value, comment: $('#rc').value, photo_url }); error ? alert(error.message) : reviews(pid); };
+}
+function showCart() {
+  if (!user) { $('#main').innerHTML = ''; return authBox($('#auth'), 'customer', () => location.reload()); }
+  const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const shops = [...new Set(cart.map(i => i.shop_id))];
+  const feeOf = (scope) => scope === 'all' ? fees.courier_fee : +(zones.find(z => z.area === area)?.fee ?? 60);
+  $('#main').innerHTML = `<h3>${t('cart')}</h3>${cart.map((i, n) => `<div>${esc(i.name)} x${i.qty} = ৳${i.price * i.qty} <button data-x=${n}>✕</button></div>`).join('') || 'Empty'}
+  <p>Subtotal ৳${sub}</p><input id=cp placeholder="Coupon code"><input id=ad placeholder="${t('addr')}"><select id=pm><option value=cod>Cash on Delivery</option><option value=bkash>bKash</option><option value=nagad>Nagad</option><option value=card>Card</option></select>
+  <p><small>Flat delivery fee per shop-order: local ৳${feeOf('local')}, nationwide ৳${feeOf('all')}. bKash/Nagad/Card need a payment gateway (not yet integrated).</small></p><button id=pl>${t('order')}</button>`;
+  document.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { cart.splice(+b.dataset.x, 1); save(); showCart(); });
+  $('#pl').onclick = async () => {
+    if (!cart.length) return; const code = $('#cp').value.trim(); let cpn = null;
+    if (code) { cpn = (await sb.from('coupons').select('*').eq('code', code).maybeSingle()).data; if (!cpn) return alert('Invalid coupon'); }
+    for (const sid of shops) { const items = cart.filter(i => i.shop_id === sid); const s = items.reduce((a, i) => a + i.price * i.qty, 0); const scope = items.some(i => i.scope === 'all') ? 'all' : 'local';
+      const pct = cpn && cpn.shop_id === sid ? +cpn.percent : 0;
+      const { error } = await sb.from('orders').insert({ customer: user.id, shop_id: sid, items, subtotal: s, discount: s * pct / 100, delivery_fee: feeOf(scope), payment: $('#pm').value, address: $('#ad').value, area, scope }); if (error) return alert(error.message); }
+    cart = []; save(); alert('Order placed'); showOrders();
+  };
+}
+async function showOrders() {
+  if (!user) return authBox($('#auth'), 'customer', () => location.reload());
+  const { data = [] } = await sb.from('orders').select('*, shops(name)').eq('customer', user.id).order('created_at', { ascending: false });
+  $('#main').innerHTML = `<h3>${t('orders')}</h3>${data.map(o => `<div class=c><b>${esc(o.shops?.name)}</b> — ${o.status}<br>Total ৳${o.subtotal - o.discount + +o.delivery_fee}
+  ${o.status === 'awaiting_customer' ? `<p>Vendor changed delivery fee: ৳${o.delivery_fee} → ৳${o.new_fee}</p><button data-ok=${o.id}>Accept</button><button data-no=${o.id}>Cancel order</button>` : ''}</div>`).join('')}`;
+  document.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { const o = data.find(x => x.id === b.dataset.ok); await sb.from('orders').update({ delivery_fee: o.new_fee, status: 'accepted' }).eq('id', o.id); showOrders(); });
+  document.querySelectorAll('[data-no]').forEach(b => b.onclick = async () => { await sb.from('orders').update({ status: 'cancelled' }).eq('id', b.dataset.no); showOrders(); });
+}
+init();
+</script></body></html>

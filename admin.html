@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Admin</title></head><body>
+<div id=auth></div><div id=main></div>
+<script type=module>
+import { brandHeader, sb, $, esc, me, authBox, getFees, css } from './app.js';
+document.head.insertAdjacentHTML('beforeend', css);
+document.body.insertAdjacentHTML('afterbegin', brandHeader('Admin'));
+async function init() {
+  const u = await me(); if (!u) return authBox($('#auth'), 'customer', init);
+  if (u.role !== 'admin') return $('#main').innerHTML = '<h3>Not an admin</h3>';
+  $('#auth').innerHTML = '';
+  const [shops, ords, zones, reps, fees] = await Promise.all([sb.from('shops').select('*').order('verified'), sb.from('orders').select('*'), sb.from('delivery_zones').select('*'), sb.from('reviews').select('*').eq('reported', true), getFees()]);
+  const done = (ords.data || []).filter(o => o.status === 'delivered'), sales = done.reduce((s, o) => s + o.subtotal - o.discount, 0), comm = sales * (fees.commission_percent || 0) / 100;
+  $('#main').innerHTML = `<h2>Admin</h2><p>Total sales ৳${sales} · Commission (${fees.commission_percent}%) ৳${comm.toFixed(0)} · Orders ${(ords.data || []).length}</p>
+  <h3>Settings</h3><label>Commission %</label><input id=cm type=number value=${fees.commission_percent}><label>Nationwide courier fee</label><input id=cf type=number value=${fees.courier_fee}><button id=ss>Save</button>
+  <h3>Delivery zones</h3>${(zones.data || []).map(z => `<div>${esc(z.area)}: ৳<input style=display:inline;width:80px type=number value=${z.fee} data-z='${esc(z.area)}'></div>`).join('')}<input id=na placeholder="New area"><input id=nfee type=number placeholder=Fee><button id=sz>Save zones / add area</button>
+  <h3>Shops</h3>${(shops.data || []).map(s => `<div class=c>${esc(s.name)} (${esc(s.area)}) NID: ${esc(s.nid_no)} ${s.verified ? '✅' : `<button data-v=${s.id}>Verify</button>`}<br><a href="${esc(s.photo_url)}" target=_blank>Owner photo</a> <a href="${esc(s.signboard_url)}" target=_blank>Signboard</a></div>`).join('')}
+  <h3>Reported reviews</h3>${(reps.data || []).map(r => `<div class=c>${'★'.repeat(r.rating)} ${esc(r.comment)}<br><i>Vendor note: ${esc(r.report_note)}</i><br><button data-d=${r.id}>Remove review</button><button data-k=${r.id}>Keep review</button></div>`).join('') || '<p>None</p>'}`;
+  $('#ss').onclick = async () => { await sb.from('settings').upsert([{ key: 'commission_percent', value: +$('#cm').value }, { key: 'courier_fee', value: +$('#cf').value }]); init(); };
+  $('#sz').onclick = async () => { const rows = [...document.querySelectorAll('[data-z]')].map(i => ({ area: i.dataset.z, fee: +i.value })); if ($('#na').value) rows.push({ area: $('#na').value, fee: +$('#nfee').value || 60 }); await sb.from('delivery_zones').upsert(rows); init(); };
+  document.querySelectorAll('[data-v]').forEach(b => b.onclick = async () => { await sb.from('shops').update({ verified: true }).eq('id', b.dataset.v); init(); });
+  document.querySelectorAll('[data-d]').forEach(b => b.onclick = async () => { await sb.from('reviews').delete().eq('id', b.dataset.d); init(); });
+  document.querySelectorAll('[data-k]').forEach(b => b.onclick = async () => { await sb.from('reviews').update({ reported: false }).eq('id', b.dataset.k); init(); });
+}
+init();
+</script></body></html>
