@@ -36,8 +36,8 @@ async function load() {
   if (tab === 'offers') qq = qq.not('offer_price', 'is', null);
   if (q) qq = qq.ilike('name', `%${q}%`);
   const { data = [] } = await qq.order('created_at', { ascending: false });
-  $('#main').innerHTML = `<div class=g>${data.map(p => `<div class=c>${p.image_url ? `<img src="${esc(p.image_url)}">` : ''}<b>${esc(p.name)}</b><br><small>${esc(p.shops.name)} · ${esc(p.category)}</small>
-  <p>${p.offer_price ? `<s>৳${p.price}</s> <b>৳${p.offer_price}</b>` : `৳${p.price}`}</p><small>${esc(p.description)}</small><br>
+  $('#main').innerHTML = `<div class=g>${data.map(p => `<div class=c>${p.image_url ? `<img src="${esc(p.image_url)}">` : `<div class=ph>${esc((p.name || '?')[0])}</div>`}<div class=nm>${esc(p.name)}</div><small>${esc(p.shops.name)} · ${esc(p.category)}</small>
+  <p class=pr>${p.offer_price ? `<s>৳${p.price}</s> <b>৳${p.offer_price}</b>` : `৳${p.price}`}</p><small>${esc(p.description)}</small><br>
   ${p.in_stock ? `<button data-a='${p.id}'>${t('add')}</button>` : `<b style=color:red>${t('soldout')}</b>`}<button data-r='${p.id}'>★ Reviews</button></div>`).join('') || '<p>No products</p>'}</div>`;
   document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const p = data.find(x => x.id === b.dataset.a);
     const i = cart.find(x => x.id === p.id); i ? i.qty++ : cart.push({ id: p.id, name: p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 });

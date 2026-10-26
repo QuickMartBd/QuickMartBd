@@ -27,11 +27,34 @@ export async function upload(file, folder) {
   const { error } = await sb.storage.from('images').upload(path, file); if (error) throw error;
   return sb.storage.from('images').getPublicUrl(path).data.publicUrl;
 }
-export const css = `<style>body{font-family:system-ui;max-width:900px;margin:auto;padding:12px}input,select,textarea{display:block;margin:6px 0;padding:8px;width:100%;box-sizing:border-box}button{padding:8px 12px;margin:2px;cursor:pointer}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}.c{border:1px solid #ccc;border-radius:8px;padding:8px;margin:6px 0}.c img{width:100%;height:110px;object-fit:cover}.bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.bar>*{width:auto}</style>`;
+export const css = `<style>
+:root{--g:#0b6b3a;--g2:#0e8a4b;--r:#d62828;--bg:#f4f7f5;--ink:#1c2a22}
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;max-width:900px;margin:auto;padding:0 12px 40px;background:var(--bg);color:var(--ink)}
+h2,h3,h4{color:var(--g)}
+input,select,textarea{display:block;margin:6px 0;padding:11px 12px;width:100%;border:1px solid #c9d6cd;border-radius:10px;background:#fff;font-size:15px}
+button{padding:10px 14px;margin:3px 3px 3px 0;cursor:pointer;border:0;border-radius:10px;background:var(--g);color:#fff;font-size:14px;font-weight:600}
+button:active{background:var(--g2)}
+button.del{background:var(--r)}
+.g{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:700px){.g{grid-template-columns:repeat(4,1fr)}}
+.c{background:#fff;border-radius:14px;padding:10px;margin:8px 0;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.c img,.ph{width:100%;height:120px;object-fit:cover;border-radius:10px}
+.ph{background:linear-gradient(135deg,var(--g),var(--g2));color:#fff;display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:700}
+.nm{font-weight:700;margin:6px 0 2px}
+.pr{color:var(--g);font-weight:800;font-size:18px;margin:6px 0}
+.pr s{color:#999;font-weight:400;font-size:14px}
+.bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.bar>*{width:auto}
+.hdr{display:flex;align-items:center;gap:10px;padding:10px 0}
+.hdr img{height:44px;width:44px;object-fit:cover;border-radius:50%;border:2px solid var(--g)}
+.hdr h2{margin:0;font-size:22px}
+.ban{width:100%;max-height:170px;object-fit:cover;border-radius:14px;margin-bottom:8px}
+</style>`;
 
 export function brandHeader(sub = '') {
   document.title = BRAND_NAME + (sub ? ' - ' + sub : '');
   const hide = "this.style.display='none'";
-  return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0"><img src="${esc(LOGO_URL)}" onerror="${hide}" style="height:48px;width:auto"><h2 style="margin:0">${esc(BRAND_NAME)}${sub ? ' <small>(' + sub + ')</small>' : ''}</h2></div>`
-    + (BANNER_URL ? `<img src="${esc(BANNER_URL)}" onerror="${hide}" style="width:100%;max-height:180px;object-fit:cover;border-radius:8px;margin-bottom:8px">` : '');
+  return `<div class=hdr><img src="${esc(LOGO_URL)}" onerror="${hide}"><h2>${esc(BRAND_NAME)}${sub ? ' <small style="color:#666">(' + sub + ')</small>' : ''}</h2></div>`
+    + (BANNER_URL ? `<img class=ban src="${esc(BANNER_URL)}" onerror="${hide}">` : '');
 }
