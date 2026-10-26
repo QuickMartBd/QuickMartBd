@@ -1,52 +1,104 @@
-<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Super App</title></head><body>
-<div id=top></div><div id=auth></div><div id=main></div>
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>QuickMart BD</title>
+<style>
+:root{--g:#0b6b3a;--g2:#0e8a4b;--r:#d62828;--ink:#1c2a22}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;color:var(--ink);background:#fff;max-width:900px;margin:auto}
+button{cursor:pointer;border:0;border-radius:20px;background:var(--g);color:#fff;padding:9px 14px;font-weight:600;font-size:14px}
+input,select,textarea{display:block;width:100%;margin:6px 0;padding:11px 12px;border:1px solid #c9d6cd;border-radius:10px;font-size:15px;background:#fff}
+#hd{position:sticky;top:0;z-index:20;background:#fff;display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #eee}
+#hd img{height:38px;width:38px;border-radius:50%;object-fit:cover;border:2px solid var(--g)}
+#hd input{margin:0;flex:1;border-radius:22px;background:#f1f1f1;border:0;padding:10px 14px}
+.ic{background:none;color:var(--ink);font-size:22px;padding:4px 6px;position:relative}
+.bg{position:absolute;top:-2px;right:-2px;background:var(--r);color:#fff;border-radius:10px;font-size:11px;padding:1px 5px}
+#promo{display:flex;align-items:center;gap:8px;background:#e8f5ec;color:var(--g);padding:6px 10px;font-size:13px;font-weight:600}
+#promo select{width:auto;margin:0;padding:5px 8px;border-radius:14px;font-size:13px}
+#promo button{padding:4px 10px;font-size:13px}
+#promo span{flex:1;text-align:center}
+.menu{position:fixed;top:58px;right:8px;width:260px;background:#fff;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.2);padding:12px;z-index:30}
+.menu a,.menu div.it{display:block;padding:12px 4px;border-bottom:1px solid #eee;color:var(--ink);text-decoration:none;cursor:pointer}
+.menu button.big{width:100%;padding:13px;font-size:16px}
+#wrap{display:flex;align-items:flex-start}
+#cats{width:92px;flex:none;background:#f4f4f4;position:sticky;top:56px;max-height:calc(100vh - 56px);overflow:auto}
+#cats div{padding:14px 6px;font-size:13px;text-align:center;cursor:pointer;border-left:3px solid transparent}
+#cats div.on{background:#fff;border-left-color:var(--g);font-weight:700;color:var(--g)}
+#main{flex:1;padding:8px;min-width:0}
+.tabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.tabs button{background:#eee;color:var(--ink)} .tabs button.on{background:var(--g);color:#fff}
+.g{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.pc{position:relative;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #eee}
+.pc img,.ph{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}
+.ph{background:linear-gradient(135deg,var(--g),var(--g2));color:#fff;display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:700}
+.pb{padding:6px 8px 8px}
+.nm{font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px}
+.sh{font-size:11px;color:#777;margin:2px 0}
+.pr{font-size:18px;font-weight:800;color:var(--r)} .pr s{font-size:12px;color:#999;font-weight:400}
+.off{display:inline-block;border:1px solid var(--r);color:var(--r);font-size:11px;padding:0 5px;border-radius:4px;margin-left:4px}
+.row{display:flex;align-items:center;justify-content:space-between}
+.add{width:38px;height:38px;border-radius:50%;background:#fff;color:var(--ink);border:1.5px solid var(--ink);padding:0;font-size:18px}
+.so{position:absolute;top:0;left:0;right:0;aspect-ratio:1/1;background:rgba(255,255,255,.75);display:flex;align-items:center;justify-content:center;color:var(--r);font-weight:800;font-size:18px}
+.rv{font-size:11px;color:var(--g);cursor:pointer;margin-top:2px}
+.card{background:#f7f9f8;border-radius:12px;padding:10px;margin:8px 0}
+.hero{width:100%;border-radius:10px;margin-bottom:8px}
+</style></head><body>
+<header id=hd></header><div id=promo></div><div id=menu class=menu hidden></div><div id=auth style="padding:0 10px"></div>
+<div id=wrap><nav id=cats></nav><main id=main></main></div>
 <script type=module>
-import { brandHeader, sb, $, esc, t, toggleLang, me, authBox, getFees, upload, css } from './app.js';
-document.head.insertAdjacentHTML('beforeend', css);
-document.body.insertAdjacentHTML('afterbegin', brandHeader(''));
-let user, tab = 'local', q = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || '';
-const save = () => localStorage.cart = JSON.stringify(cart);
+import { sb, $, esc, t, toggleLang, me, authBox, getFees, upload } from './app.js';
+import { BRAND_NAME, LOGO_URL, BANNER_URL } from './config.js';
+document.title = BRAND_NAME;
+const CATS = [['', '🏠', 'All'], ['Medicine', '💊', 'Medicine'], ['Garments - Men', '👔', "Men's"], ['Garments - Women', '👗', "Women's"], ['Garments - Kids', '🧸', 'Kids'], ['Grocery', '🛒', 'Grocery'], ['Books', '📚', 'Books'], ['Homemade', '🍰', 'Homemade']];
+let user, tab = 'local', q = '', cat = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || '', timer;
+const save = () => { localStorage.cart = JSON.stringify(cart); $('#cn').textContent = cart.length; };
 async function init() {
   user = await me(); fees = await getFees();
   zones = (await sb.from('delivery_zones').select('*')).data || [];
   if (!area && zones[0]) area = zones[0].area;
-  $('#top').innerHTML = `<div class=bar><select id=ar>${zones.map(z => `<option ${z.area===area?'selected':''}>${esc(z.area)}</option>`).join('')}</select>
-  <button id=gps>📍</button><button id=lg>EN/বাং</button>${user ? `<button id=lo>${t('logout')}</button>` : `<button id=li>${t('login')}</button>`}</div>
-  <div class=bar><input id=q placeholder="${t('search')}" style="flex:1"><button id=vs>🎤</button><button id=sb>${t('search')}</button></div>
-  <div class=bar>${['local','all','offers'].map(x => `<button data-t=${x}>${t(x)}</button>`).join('')}<button id=ords>${t('orders')}</button><button id=cb>${t('cart')} (${cart.length})</button></div>`;
+  $('#hd').innerHTML = `<img src="${esc(LOGO_URL)}" onerror="this.style.display='none'"><input id=q placeholder="${t('search')}…"><button class=ic id=vs>🎤</button><button class=ic id=acc>👤</button><button class=ic id=cb>🛒<span class=bg id=cn>${cart.length}</span></button>`;
+  $('#promo').innerHTML = `<select id=ar>${zones.map(z => `<option ${z.area === area ? 'selected' : ''}>${esc(z.area)}</option>`).join('')}</select><button id=gps>📍</button><span>🚚 Local &amp; nationwide delivery</span><button id=lg>EN/বাং</button>`;
+  $('#cats').innerHTML = CATS.map(c => `<div data-c="${c[0]}" class="${c[0] === cat ? 'on' : ''}">${c[1]}<br>${c[2]}</div>`).join('');
+  document.querySelectorAll('#cats div').forEach(d => d.onclick = () => { cat = d.dataset.c; document.querySelectorAll('#cats div').forEach(x => x.classList.toggle('on', x === d)); load(); });
   $('#ar').onchange = e => { area = e.target.value; localStorage.area = area; load(); };
   $('#lg').onclick = toggleLang;
-  if ($('#lo')) $('#lo').onclick = async () => { await sb.auth.signOut(); location.reload(); };
-  if ($('#li')) $('#li').onclick = () => authBox($('#auth'), 'customer', () => location.reload());
+  $('#q').oninput = e => { clearTimeout(timer); timer = setTimeout(() => { q = e.target.value; load(); }, 350); };
   $('#gps').onclick = () => navigator.geolocation?.getCurrentPosition(async p => {
     try { const r = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${p.coords.latitude}&lon=${p.coords.longitude}`)).json();
       const txt = JSON.stringify(r.address || {}).toLowerCase(); const hit = zones.find(z => txt.includes(z.area.toLowerCase()));
       if (hit) { area = hit.area; localStorage.area = area; $('#ar').value = area; load(); } else alert('Area not served yet'); } catch { alert('Could not detect'); } });
-  $('#sb').onclick = () => { q = $('#q').value; load(); };
   $('#vs').onclick = () => { const R = window.SpeechRecognition || window.webkitSpeechRecognition; if (!R) return alert('Voice not supported');
     const r = new R(); r.lang = localStorage.lang === 'bn' ? 'bn-BD' : 'en-US'; r.onresult = e => { $('#q').value = e.results[0][0].transcript; q = $('#q').value; load(); }; r.start(); };
-  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; load(); });
-  $('#cb').onclick = showCart; $('#ords').onclick = showOrders;
+  $('#cb').onclick = showCart;
+  $('#acc').onclick = () => { const m = $('#menu'); m.hidden = !m.hidden; if (m.hidden) return;
+    m.innerHTML = (user ? `<b>${esc(user.name || 'Account')}</b>` : `<button class=big id=si>${t('login')} / ${t('signup')}</button>`) +
+      `<div class=it id=mo>📦 ${t('orders')}</div><div class=it id=ml>🌐 EN/বাং</div><a href="vendor.html">🏪 Become a seller</a>` + (user ? `<div class=it id=mx>🚪 ${t('logout')}</div>` : '');
+    if ($('#si')) $('#si').onclick = () => { m.hidden = true; authBox($('#auth'), 'customer', () => location.reload()); };
+    $('#mo').onclick = () => { m.hidden = true; showOrders(); }; $('#ml').onclick = toggleLang;
+    if ($('#mx')) $('#mx').onclick = async () => { await sb.auth.signOut(); location.reload(); }; };
   load();
 }
+function tabsHtml() { return `<div class=tabs>${['local', 'all', 'offers'].map(x => `<button data-t=${x} class="${x === tab ? 'on' : ''}">${t(x)}</button>`).join('')}</div>`; }
 async function load() {
   let qq = sb.from('products').select('*, shops!inner(name,area,verified)').eq('shops.verified', true);
   if (tab === 'local') qq = qq.eq('scope', 'local').eq('shops.area', area);
   if (tab === 'all') qq = qq.eq('scope', 'all');
   if (tab === 'offers') qq = qq.not('offer_price', 'is', null);
+  if (cat) qq = qq.eq('category', cat);
   if (q) qq = qq.ilike('name', `%${q}%`);
   const { data = [] } = await qq.order('created_at', { ascending: false });
-  $('#main').innerHTML = `<div class=g>${data.map(p => `<div class=c>${p.image_url ? `<img src="${esc(p.image_url)}">` : `<div class=ph>${esc((p.name || '?')[0])}</div>`}<div class=nm>${esc(p.name)}</div><small>${esc(p.shops.name)} · ${esc(p.category)}</small>
-  <p class=pr>${p.offer_price ? `<s>৳${p.price}</s> <b>৳${p.offer_price}</b>` : `৳${p.price}`}</p><small>${esc(p.description)}</small><br>
-  ${p.in_stock ? `<button data-a='${p.id}'>${t('add')}</button>` : `<b style=color:red>${t('soldout')}</b>`}<button data-r='${p.id}'>★ Reviews</button></div>`).join('') || '<p>No products</p>'}</div>`;
+  const hero = (BANNER_URL && !q && !cat) ? `<img class=hero src="${esc(BANNER_URL)}" onerror="this.style.display='none'">` : '';
+  $('#main').innerHTML = hero + tabsHtml() + `<div class=g>${data.map(p => { const pct = p.offer_price ? Math.round((1 - p.offer_price / p.price) * 100) : 0;
+    return `<div class=pc>${p.image_url ? `<img src="${esc(p.image_url)}">` : `<div class=ph>${esc((p.name || '?')[0])}</div>`}${p.in_stock ? '' : `<div class=so>${t('soldout')}</div>`}
+    <div class=pb><div class=nm>${esc(p.name)}</div><div class=sh>${esc(p.shops.name)}</div>
+    <div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s><span class=off>${pct}% OFF</span>` : ''}</div>
+    <div class=row><span class=rv data-r='${p.id}'>★ Reviews</span>${p.in_stock ? `<button class=add data-a='${p.id}'>🛒</button>` : ''}</div></div></div>`; }).join('') || '<p>No products here yet</p>'}</div>`;
+  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; load(); });
   document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const p = data.find(x => x.id === b.dataset.a);
     const i = cart.find(x => x.id === p.id); i ? i.qty++ : cart.push({ id: p.id, name: p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 });
-    save(); $('#cb').textContent = `${t('cart')} (${cart.length})`; });
+    save(); b.textContent = '✓'; setTimeout(() => b.textContent = '🛒', 700); });
   document.querySelectorAll('[data-r]').forEach(b => b.onclick = () => reviews(b.dataset.r));
 }
 async function reviews(pid) {
   const { data = [] } = await sb.from('reviews').select('*').eq('product_id', pid).order('created_at', { ascending: false });
-  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>Reviews</h3>${data.map(r => `<div class=c>${'★'.repeat(r.rating)}<br>${esc(r.comment)}${r.photo_url ? `<br><img src="${esc(r.photo_url)}" style=max-width:120px>` : ''}</div>`).join('') || '<p>No reviews</p>'}
+  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>Reviews</h3>${data.map(r => `<div class=card>${'★'.repeat(r.rating)}<br>${esc(r.comment)}${r.photo_url ? `<br><img src="${esc(r.photo_url)}" style=max-width:120px>` : ''}</div>`).join('') || '<p>No reviews</p>'}
   ${user ? `<h4>Write review</h4><select id=rt><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select><textarea id=rc></textarea><input id=rp type=file accept=image/*><button id=rs>Submit</button>` : '<p>Login to review</p>'}`;
   if (user) $('#rs').onclick = async () => { let photo_url = null; const f = $('#rp').files[0]; if (f) photo_url = await upload(f, 'reviews');
     const { error } = await sb.from('reviews').insert({ product_id: pid, customer: user.id, rating: +$('#rt').value, comment: $('#rc').value, photo_url }); error ? alert(error.message) : reviews(pid); };
@@ -56,8 +108,8 @@ function showCart() {
   const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const shops = [...new Set(cart.map(i => i.shop_id))];
   const feeOf = (scope) => scope === 'all' ? fees.courier_fee : +(zones.find(z => z.area === area)?.fee ?? 60);
-  $('#main').innerHTML = `<h3>${t('cart')}</h3>${cart.map((i, n) => `<div>${esc(i.name)} x${i.qty} = ৳${i.price * i.qty} <button data-x=${n}>✕</button></div>`).join('') || 'Empty'}
-  <p>Subtotal ৳${sub}</p><input id=cp placeholder="Coupon code"><input id=ad placeholder="${t('addr')}"><select id=pm><option value=cod>Cash on Delivery</option><option value=bkash>bKash</option><option value=nagad>Nagad</option><option value=card>Card</option></select>
+  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('cart')}</h3>${cart.map((i, n) => `<div class=card>${esc(i.name)} x${i.qty} = ৳${i.price * i.qty} <button data-x=${n}>✕</button></div>`).join('') || 'Empty'}
+  <p><b>Subtotal ৳${sub}</b></p><input id=cp placeholder="Coupon code"><input id=ad placeholder="${t('addr')}"><select id=pm><option value=cod>Cash on Delivery</option><option value=bkash>bKash</option><option value=nagad>Nagad</option><option value=card>Card</option></select>
   <p><small>Flat delivery fee per shop-order: local ৳${feeOf('local')}, nationwide ৳${feeOf('all')}. bKash/Nagad/Card need a payment gateway (not yet integrated).</small></p><button id=pl>${t('order')}</button>`;
   document.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { cart.splice(+b.dataset.x, 1); save(); showCart(); });
   $('#pl').onclick = async () => {
@@ -72,8 +124,8 @@ function showCart() {
 async function showOrders() {
   if (!user) return authBox($('#auth'), 'customer', () => location.reload());
   const { data = [] } = await sb.from('orders').select('*, shops(name)').eq('customer', user.id).order('created_at', { ascending: false });
-  $('#main').innerHTML = `<h3>${t('orders')}</h3>${data.map(o => `<div class=c><b>${esc(o.shops?.name)}</b> — ${o.status}<br>Total ৳${o.subtotal - o.discount + +o.delivery_fee}
-  ${o.status === 'awaiting_customer' ? `<p>Vendor changed delivery fee: ৳${o.delivery_fee} → ৳${o.new_fee}</p><button data-ok=${o.id}>Accept</button><button data-no=${o.id}>Cancel order</button>` : ''}</div>`).join('')}`;
+  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('orders')}</h3>${data.map(o => `<div class=card><b>${esc(o.shops?.name)}</b> — ${o.status}<br>Total ৳${o.subtotal - o.discount + +o.delivery_fee}
+  ${o.status === 'awaiting_customer' ? `<p>Vendor changed delivery fee: ৳${o.delivery_fee} → ৳${o.new_fee}</p><button data-ok=${o.id}>Accept</button> <button data-no=${o.id} style="background:#d62828">Cancel order</button>` : ''}</div>`).join('') || '<p>No orders yet</p>'}`;
   document.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { const o = data.find(x => x.id === b.dataset.ok); await sb.from('orders').update({ delivery_fee: o.new_fee, status: 'accepted' }).eq('id', o.id); showOrders(); });
   document.querySelectorAll('[data-no]').forEach(b => b.onclick = async () => { await sb.from('orders').update({ status: 'cancelled' }).eq('id', b.dataset.no); showOrders(); });
 }
