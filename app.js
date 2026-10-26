@@ -50,11 +50,16 @@ button.del{background:var(--r)}
 .hdr img{height:44px;width:44px;object-fit:cover;border-radius:50%;border:2px solid var(--g)}
 .hdr h2{margin:0;font-size:22px}
 .ban{width:100%;max-height:170px;object-fit:cover;border-radius:14px;margin-bottom:8px}
-</style>`;
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0}.stats div{background:#fff;border-radius:14px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);color:#666;font-size:13px}.stats b{display:block;font-size:22px;color:var(--g)}</style>`;
 
 export function brandHeader(sub = '') {
   document.title = BRAND_NAME + (sub ? ' - ' + sub : '');
   const hide = "this.style.display='none'";
-  return `<div class=hdr><img src="${esc(LOGO_URL)}" onerror="${hide}"><h2>${esc(BRAND_NAME)}${sub ? ' <small style="color:#666">(' + sub + ')</small>' : ''}</h2></div>`
+  return (sub ? '<a href="index.html" style="color:#0b6b3a;font-size:14px;text-decoration:none;display:block;padding-top:8px">← Back to shop</a>' : '') + `<div class=hdr><img src="${esc(LOGO_URL)}" onerror="${hide}"><h2>${esc(BRAND_NAME)}${sub ? ' <small style="color:#666">(' + sub + ')</small>' : ''}</h2></div>`
     + (BANNER_URL ? `<img class=ban src="${esc(BANNER_URL)}" onerror="${hide}">` : '');
 }
+
+import { AREAS } from './bd_areas.js';
+export { AREAS };
+export function fillDistricts(sel, cur) { sel.innerHTML = Object.keys(AREAS).map(d => `<option ${d === cur ? 'selected' : ''}>${esc(d)}</option>`).join(''); }
+export function fillUpazilas(sel, d, cur, withAll = false) { sel.innerHTML = (withAll ? '<option value="">All areas</option>' : '') + (AREAS[d] || []).map(u => `<option ${u === cur ? 'selected' : ''}>${esc(u)}</option>`).join(''); }

@@ -1,22 +1,23 @@
 <!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Vendor</title></head><body>
 <div id=auth></div><div id=main></div>
 <script type=module>
-import { brandHeader, sb, $, esc, me, authBox, upload, css } from './app.js';
+import { brandHeader, sb, $, esc, me, authBox, upload, css, fillDistricts, fillUpazilas } from './app.js';
 document.head.insertAdjacentHTML('beforeend', css);
 document.body.insertAdjacentHTML('afterbegin', brandHeader('Vendor'));
 let user, shop;
 async function init() {
-  user = await me(); if (!user) return authBox($('#auth'), 'vendor', init);
+  user = await me(); if (!user) return authBox($('#auth'), 'customer', init);
   $('#auth').innerHTML = '';
   shop = (await sb.from('shops').select('*').eq('owner', user.id).maybeSingle()).data;
   shop ? dash() : register();
 }
 async function register() {
   const zones = (await sb.from('delivery_zones').select('area')).data || [];
-  $('#main').innerHTML = `<h3>Register shop</h3><input id=sn placeholder="Shop name"><select id=sa>${zones.map(z => `<option>${esc(z.area)}</option>`).join('')}</select><input id=nid placeholder="NID number">
+  $('#main').innerHTML = `<h3>Register shop</h3><input id=sn placeholder="Shop name"><label>District</label><select id=sa></select><label>Upazila / Thana</label><select id=su></select><input id=nid placeholder="NID number">
   <label>Your photo (required)</label><input id=f1 type=file accept=image/*><label>Signboard photo (required)</label><input id=f2 type=file accept=image/*><button id=go>Submit for verification</button>`;
+  fillDistricts($('#sa'), 'Dhaka'); fillUpazilas($('#su'), 'Dhaka'); $('#sa').onchange = () => fillUpazilas($('#su'), $('#sa').value);
   $('#go').onclick = async () => { const a = $('#f1').files[0], b = $('#f2').files[0]; if (!a || !b || !$('#sn').value || !$('#nid').value) return alert('All fields and both photos are required');
-    const { error } = await sb.from('shops').insert({ owner: user.id, name: $('#sn').value, area: $('#sa').value, nid_no: $('#nid').value, photo_url: await upload(a, 'owners'), signboard_url: await upload(b, 'signs') });
+    const { error } = await sb.from('shops').insert({ owner: user.id, name: $('#sn').value, area: $('#sa').value, upazila: $('#su').value, nid_no: $('#nid').value, photo_url: await upload(a, 'owners'), signboard_url: await upload(b, 'signs') });
     error ? alert(error.message) : init(); };
 }
 async function dash() {
@@ -25,7 +26,7 @@ async function dash() {
   const done = ords.filter(o => o.status === 'delivered'), rev = done.reduce((s, o) => s + o.subtotal - o.discount, 0);
   const sold = {}; done.forEach(o => o.items.forEach(i => sold[i.name] = (sold[i.name] || 0) + i.qty)); const best = Object.entries(sold).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const mon = {}; done.forEach(o => { const k = o.created_at.slice(0, 7); mon[k] = (mon[k] || 0) + o.subtotal - o.discount; });
-  $('#main').innerHTML = `<h2>${esc(shop.name)}</h2><p>Delivered revenue ৳${rev}<br>Monthly: ${Object.entries(mon).map(([k, v]) => `${k}: ৳${v}`).join(' | ') || '-'}<br>Best sellers: ${best.map(b => `${esc(b[0])} (${b[1]})`).join(', ') || '-'}</p>
+  $('#main').innerHTML = `<h2>${esc(shop.name)}</h2><div class=stats><div><b>৳${rev}</b>Delivered revenue</div><div><b>${ords.length}</b>Orders</div><div><b>${prods.length}</b>Products</div><div><b>${ords.filter(o => o.status === 'pending').length}</b>Pending</div></div><p>Monthly: ${Object.entries(mon).map(([k, v]) => `${k}: ৳${v}`).join(' | ') || '-'}<br>Best sellers: ${best.map(b => `${esc(b[0])} (${b[1]})`).join(', ') || '-'}</p>
   <h3>Add product</h3><input id=pn placeholder=Name><textarea id=pd placeholder="Description (size, material, usage)"></textarea><input id=pp type=number placeholder=Price><input id=po type=number placeholder="Offer price (optional → goes to Offers)">
   <select id=pc><option>Medicine</option><option>Garments - Men</option><option>Garments - Women</option><option>Garments - Kids</option><option>Grocery</option><option>Books</option><option>Homemade</option></select>
   <select id=ps><option value=local>Sell in my local area</option><option value=all>Sell all Bangladesh</option></select><input id=pi type=file accept=image/*><button id=pa>Add</button>

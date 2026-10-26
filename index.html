@@ -10,7 +10,7 @@ input,select,textarea{display:block;width:100%;margin:6px 0;padding:11px 12px;bo
 #hd input{margin:0;flex:1;border-radius:22px;background:#f1f1f1;border:0;padding:10px 14px}
 .ic{background:none;color:var(--ink);font-size:22px;padding:4px 6px;position:relative}
 .bg{position:absolute;top:-2px;right:-2px;background:var(--r);color:#fff;border-radius:10px;font-size:11px;padding:1px 5px}
-#promo{display:flex;align-items:center;gap:8px;background:#e8f5ec;color:var(--g);padding:6px 10px;font-size:13px;font-weight:600}
+#promo{flex-wrap:wrap;display:flex;align-items:center;gap:8px;background:#e8f5ec;color:var(--g);padding:6px 10px;font-size:13px;font-weight:600}
 #promo select{width:auto;margin:0;padding:5px 8px;border-radius:14px;font-size:13px}
 #promo button{padding:4px 10px;font-size:13px}
 #promo span{flex:1;text-align:center}
@@ -39,46 +39,48 @@ input,select,textarea{display:block;width:100%;margin:6px 0;padding:11px 12px;bo
 .rv{font-size:11px;color:var(--g);cursor:pointer;margin-top:2px}
 .card{background:#f7f9f8;border-radius:12px;padding:10px;margin:8px 0}
 .hero{width:100%;border-radius:10px;margin-bottom:8px}
+body{padding-bottom:70px}#bn{position:fixed;bottom:0;left:0;right:0;max-width:900px;margin:auto;display:flex;background:#fff;border-top:1px solid #ddd;z-index:25}#bn div{flex:1;text-align:center;padding:6px 0;font-size:11px;cursor:pointer}#bn b{display:block;font-size:21px;font-weight:400;position:relative}#bn b .bg{right:30%}.cg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cg div{background:#f4f7f5;border-radius:12px;padding:16px 4px;text-align:center;cursor:pointer;font-size:13px}.cg b{display:block;font-size:30px;font-weight:400}
 </style></head><body>
 <header id=hd></header><div id=promo></div><div id=menu class=menu hidden></div><div id=auth style="padding:0 10px"></div>
-<div id=wrap><nav id=cats></nav><main id=main></main></div>
+<div id=wrap><main id=main></main></div><nav id=bn></nav>
 <script type=module>
-import { sb, $, esc, t, toggleLang, me, authBox, getFees, upload } from './app.js';
+import { sb, $, esc, t, toggleLang, me, authBox, getFees, upload, AREAS, fillDistricts, fillUpazilas } from './app.js';
 import { BRAND_NAME, LOGO_URL, BANNER_URL } from './config.js';
 document.title = BRAND_NAME;
 const CATS = [['', '🏠', 'All'], ['Medicine', '💊', 'Medicine'], ['Garments - Men', '👔', "Men's"], ['Garments - Women', '👗', "Women's"], ['Garments - Kids', '🧸', 'Kids'], ['Grocery', '🛒', 'Grocery'], ['Books', '📚', 'Books'], ['Homemade', '🍰', 'Homemade']];
-let user, tab = 'local', q = '', cat = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || '', timer;
+let user, shop, tab = 'local', q = '', cat = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || 'Dhaka', upz = localStorage.upz || '', timer;
 const save = () => { localStorage.cart = JSON.stringify(cart); $('#cn').textContent = cart.length; };
 async function init() {
-  user = await me(); fees = await getFees();
+  user = await me(); shop = user ? (await sb.from('shops').select('id,verified').eq('owner', user.id).maybeSingle()).data : null; fees = await getFees();
   zones = (await sb.from('delivery_zones').select('*')).data || [];
-  if (!area && zones[0]) area = zones[0].area;
-  $('#hd').innerHTML = `<img src="${esc(LOGO_URL)}" onerror="this.style.display='none'"><input id=q placeholder="${t('search')}…"><button class=ic id=vs>🎤</button><button class=ic id=acc>👤</button><button class=ic id=cb>🛒<span class=bg id=cn>${cart.length}</span></button>`;
-  $('#promo').innerHTML = `<select id=ar>${zones.map(z => `<option ${z.area === area ? 'selected' : ''}>${esc(z.area)}</option>`).join('')}</select><button id=gps>📍</button><span>🚚 Local &amp; nationwide delivery</span><button id=lg>EN/বাং</button>`;
-  $('#cats').innerHTML = CATS.map(c => `<div data-c="${c[0]}" class="${c[0] === cat ? 'on' : ''}">${c[1]}<br>${c[2]}</div>`).join('');
-  document.querySelectorAll('#cats div').forEach(d => d.onclick = () => { cat = d.dataset.c; document.querySelectorAll('#cats div').forEach(x => x.classList.toggle('on', x === d)); load(); });
-  $('#ar').onchange = e => { area = e.target.value; localStorage.area = area; load(); };
-  $('#lg').onclick = toggleLang;
+  $('#hd').innerHTML = `<img src="${esc(LOGO_URL)}" onerror="this.style.display='none'"><input id=q placeholder="${t('search')}…"><button class=ic id=vs>🎤</button>`;
+  $('#bn').innerHTML = `<div id=nh><b>🏠</b>Home</div><div id=nc><b>🗂️</b>Categories</div><div id=cb><b>🛒<span class=bg id=cn>${cart.length}</span></b>Cart</div><div id=mo2><b>📦</b>Orders</div><div id=acc><b>👤</b>Account</div>`;
+  $('#promo').innerHTML = `<select id=ar></select><select id=uz></select><button id=gps>📍</button>`;
+  fillDistricts($('#ar'), area); fillUpazilas($('#uz'), area, upz, true);
+  $('#ar').onchange = e => setArea(e.target.value, '');
+  $('#uz').onchange = e => { upz = e.target.value; localStorage.upz = upz; load(); };
   $('#q').oninput = e => { clearTimeout(timer); timer = setTimeout(() => { q = e.target.value; load(); }, 350); };
   $('#gps').onclick = () => navigator.geolocation?.getCurrentPosition(async p => {
     try { const r = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${p.coords.latitude}&lon=${p.coords.longitude}`)).json();
-      const txt = JSON.stringify(r.address || {}).toLowerCase(); const hit = zones.find(z => txt.includes(z.area.toLowerCase()));
-      if (hit) { area = hit.area; localStorage.area = area; $('#ar').value = area; load(); } else alert('Area not served yet'); } catch { alert('Could not detect'); } });
+      const txt = JSON.stringify(r.address || {}).toLowerCase(); const hit = Object.keys(AREAS).find(d => txt.includes(d.toLowerCase()));
+      if (hit) setArea(hit, ''); else alert('Area not served yet'); } catch { alert('Could not detect'); } });
   $('#vs').onclick = () => { const R = window.SpeechRecognition || window.webkitSpeechRecognition; if (!R) return alert('Voice not supported');
     const r = new R(); r.lang = localStorage.lang === 'bn' ? 'bn-BD' : 'en-US'; r.onresult = e => { $('#q').value = e.results[0][0].transcript; q = $('#q').value; load(); }; r.start(); };
-  $('#cb').onclick = showCart;
+  $('#cb').onclick = showCart; $('#nh').onclick = () => { cat = ''; tab = 'local'; q = ''; $('#q').value = ''; $('#menu').hidden = true; load(); }; $('#nc').onclick = showCats; $('#mo2').onclick = showOrders;
   $('#acc').onclick = () => { const m = $('#menu'); m.hidden = !m.hidden; if (m.hidden) return;
     m.innerHTML = (user ? `<b>${esc(user.name || 'Account')}</b>` : `<button class=big id=si>${t('login')} / ${t('signup')}</button>`) +
-      `<div class=it id=mo>📦 ${t('orders')}</div><div class=it id=ml>🌐 EN/বাং</div><a href="vendor.html">🏪 Become a seller</a>` + (user ? `<div class=it id=mx>🚪 ${t('logout')}</div>` : '');
+      `<div class=it id=mo>📦 ${t('orders')}</div><div class=it id=ml>⚙️ Settings: Language EN/বাং</div><a href="vendor.html">🏪 ${shop ? 'My Shop' : 'Become a seller'}</a>` + (user ? `<div class=it id=mx>🚪 ${t('logout')}</div>` : '');
     if ($('#si')) $('#si').onclick = () => { m.hidden = true; authBox($('#auth'), 'customer', () => location.reload()); };
     $('#mo').onclick = () => { m.hidden = true; showOrders(); }; $('#ml').onclick = toggleLang;
     if ($('#mx')) $('#mx').onclick = async () => { await sb.auth.signOut(); location.reload(); }; };
   load();
 }
-function tabsHtml() { return `<div class=tabs>${['local', 'all', 'offers'].map(x => `<button data-t=${x} class="${x === tab ? 'on' : ''}">${t(x)}</button>`).join('')}</div>`; }
+function setArea(d, u) { area = d; upz = u; localStorage.area = d; localStorage.upz = u; fillDistricts($('#ar'), d); fillUpazilas($('#uz'), d, u, true); load(); }
+function showCats() { $('#menu').hidden = true; $('#main').innerHTML = `<h3>Categories</h3><div class=cg>${CATS.map(c => `<div data-c="${c[0]}"><b>${c[1]}</b>${c[2]}</div>`).join('')}</div>`; document.querySelectorAll('.cg div').forEach(d => d.onclick = () => { cat = d.dataset.c; load(); }); }
+function tabsHtml() { return `<div class=tabs>${cat ? `<button id=cc>✕ ${esc(cat)}</button>` : ''}${['local', 'all', 'offers'].map(x => `<button data-t=${x} class="${x === tab ? 'on' : ''}">${t(x)}</button>`).join('')}</div>`; }
 async function load() {
   let qq = sb.from('products').select('*, shops!inner(name,area,verified)').eq('shops.verified', true);
-  if (tab === 'local') qq = qq.eq('scope', 'local').eq('shops.area', area);
+  if (tab === 'local') { qq = qq.eq('scope', 'local').eq('shops.area', area); if (upz) qq = qq.eq('shops.upazila', upz); }
   if (tab === 'all') qq = qq.eq('scope', 'all');
   if (tab === 'offers') qq = qq.not('offer_price', 'is', null);
   if (cat) qq = qq.eq('category', cat);
@@ -90,6 +92,7 @@ async function load() {
     <div class=pb><div class=nm>${esc(p.name)}</div><div class=sh>${esc(p.shops.name)}</div>
     <div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s><span class=off>${pct}% OFF</span>` : ''}</div>
     <div class=row><span class=rv data-r='${p.id}'>★ Reviews</span>${p.in_stock ? `<button class=add data-a='${p.id}'>🛒</button>` : ''}</div></div></div>`; }).join('') || '<p>No products here yet</p>'}</div>`;
+  if ($('#cc')) $('#cc').onclick = () => { cat = ''; load(); };
   document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; load(); });
   document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const p = data.find(x => x.id === b.dataset.a);
     const i = cart.find(x => x.id === p.id); i ? i.qty++ : cart.push({ id: p.id, name: p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 });
@@ -107,7 +110,7 @@ function showCart() {
   if (!user) { $('#main').innerHTML = ''; return authBox($('#auth'), 'customer', () => location.reload()); }
   const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const shops = [...new Set(cart.map(i => i.shop_id))];
-  const feeOf = (scope) => scope === 'all' ? fees.courier_fee : +(zones.find(z => z.area === area)?.fee ?? 60);
+  const feeOf = (scope) => scope === 'all' ? fees.courier_fee : +(zones.find(z => z.area === area)?.fee ?? fees.default_local_fee ?? 60);
   $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('cart')}</h3>${cart.map((i, n) => `<div class=card>${esc(i.name)} x${i.qty} = ৳${i.price * i.qty} <button data-x=${n}>✕</button></div>`).join('') || 'Empty'}
   <p><b>Subtotal ৳${sub}</b></p><input id=cp placeholder="Coupon code"><input id=ad placeholder="${t('addr')}"><select id=pm><option value=cod>Cash on Delivery</option><option value=bkash>bKash</option><option value=nagad>Nagad</option><option value=card>Card</option></select>
   <p><small>Flat delivery fee per shop-order: local ৳${feeOf('local')}, nationwide ৳${feeOf('all')}. bKash/Nagad/Card need a payment gateway (not yet integrated).</small></p><button id=pl>${t('order')}</button>`;
@@ -117,7 +120,7 @@ function showCart() {
     if (code) { cpn = (await sb.from('coupons').select('*').eq('code', code).maybeSingle()).data; if (!cpn) return alert('Invalid coupon'); }
     for (const sid of shops) { const items = cart.filter(i => i.shop_id === sid); const s = items.reduce((a, i) => a + i.price * i.qty, 0); const scope = items.some(i => i.scope === 'all') ? 'all' : 'local';
       const pct = cpn && cpn.shop_id === sid ? +cpn.percent : 0;
-      const { error } = await sb.from('orders').insert({ customer: user.id, shop_id: sid, items, subtotal: s, discount: s * pct / 100, delivery_fee: feeOf(scope), payment: $('#pm').value, address: $('#ad').value, area, scope }); if (error) return alert(error.message); }
+      const { error } = await sb.from('orders').insert({ customer: user.id, shop_id: sid, items, subtotal: s, discount: s * pct / 100, delivery_fee: feeOf(scope), payment: $('#pm').value, address: $('#ad').value, area, upazila: upz, scope }); if (error) return alert(error.message); }
     cart = []; save(); alert('Order placed'); showOrders();
   };
 }
