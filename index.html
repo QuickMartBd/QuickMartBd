@@ -44,14 +44,14 @@ body{padding-bottom:70px}#bn{position:fixed;bottom:0;left:0;right:0;max-width:90
 <header id=hd></header><div id=promo></div><div id=menu class=menu hidden></div><div id=auth style="padding:0 10px"></div>
 <div id=wrap><main id=main></main></div><nav id=bn></nav>
 <script type=module>
-import { sb, $, esc, t, toggleLang, me, authBox, getFees, upload, AREAS, fillDistricts, fillUpazilas } from './app.js';
+import { sb, $, esc, t, toggleLang, me, authBox, getFees, upload, AREAS, fillDistricts, fillUpazilas, startNotifs } from './app.js';
 import { BRAND_NAME, LOGO_URL, BANNER_URL } from './config.js';
 document.title = BRAND_NAME;
 let CATS = [['', '🏠', 'All'], ['Medicine', '💊', 'Medicine'], ['Garments - Men', '👔', "Men's"], ['Garments - Women', '👗', "Women's"], ['Garments - Kids', '🧸', 'Kids'], ['Grocery', '🛒', 'Grocery'], ['Books', '📚', 'Books'], ['Homemade', '🍰', 'Homemade']];
 let limit = 24, lastKey = '', BANNER = BANNER_URL, PR = [], wish = JSON.parse(localStorage.wish || '[]'), user, shop, tab = 'local', q = '', cat = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || 'Dhaka', upz = localStorage.upz || '', timer;
 const save = () => { localStorage.cart = JSON.stringify(cart); $('#cn').textContent = cart.length; };
 async function init() {
-  user = await me(); shop = user ? (await sb.from('shops').select('id,verified').eq('owner', user.id).maybeSingle()).data : null; fees = await getFees();
+  user = await me(); if (user) startNotifs(user.id); shop = user ? (await sb.from('shops').select('id,verified').eq('owner', user.id).maybeSingle()).data : null; fees = await getFees();
   const bi = (await sb.from('site_info').select('*').eq('key', 'banner_url').maybeSingle()).data; if (bi?.value) BANNER = bi.value;
   const cs = (await sb.from('categories').select('*').order('sort')).data; if (cs?.length) CATS = [['', '🏠', 'All'], ...cs.map(c => [c.name, c.icon || '🛍️', c.name])];
   zones = (await sb.from('delivery_zones').select('*')).data || [];
@@ -88,7 +88,7 @@ async function showHelp() {
 function fixOffers(a) { a.forEach(p => { if (p.offer_ends && new Date(p.offer_ends) < new Date()) p.offer_price = null; }); }
 function left(t) { const m = Math.max(0, Math.floor((new Date(t) - new Date()) / 60000)); return m >= 1440 ? Math.floor(m / 1440) + 'd ' + Math.floor(m % 1440 / 60) + 'h left' : Math.floor(m / 60) + 'h ' + m % 60 + 'm left'; }
 function isOpenNow(s) { if (s.is_open === false) return false; if (!s.open_time || !s.close_time) return true; const d = new Date(), m = d.getHours() * 60 + d.getMinutes(), f = x => +x.slice(0, 2) * 60 + +x.slice(3, 5), a = f(s.open_time), b = f(s.close_time); return a <= b ? m >= a && m < b : m >= a || m < b; }
-function addCart(p, v) { const i = cart.find(x => x.id === p.id && x.v === v); i ? i.qty++ : cart.push({ id: p.id, v, name: v ? p.name + ' (' + v + ')' : p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 }); save(); }
+function addCart(p, v) { const i = cart.find(x => x.id === p.id && x.v === v); i ? i.qty++ : cart.push({ id: p.id, v, name: v ? p.name + ' (' + v + ')' : p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, cat: p.category, qty: 1 }); save(); }
 function track(s) { if (s === 'cancelled') return '❌ Cancelled'; if (s === 'awaiting_customer') return '⏳ Waiting for your confirmation'; const i = ['pending', 'accepted', 'shipped', 'delivered'].indexOf(s); return ['Ordered', 'Accepted', 'Shipped', 'Delivered'].map((x, k) => (k <= i ? '🟢 ' : '⚪ ') + x).join(' → '); }
 function detail(id) {
   const p = PR.find(x => x.id === id); if (!p) return; const n = (p.shops.phone || '').replace(/\D/g, ''), wa = n.startsWith('0') ? '88' + n : n, liked = wish.includes(id);

@@ -71,3 +71,23 @@ export async function getCats() {
   const { data } = await sb.from('categories').select('*').order('sort');
   return (data && data.length) ? data : [['Medicine', '💊'], ['Garments - Men', '👔'], ['Garments - Women', '👗'], ['Garments - Kids', '🧸'], ['Grocery', '🛒'], ['Books', '📚'], ['Homemade', '🍰']].map(c => ({ name: c[0], icon: c[1] }));
 }
+
+export function commOf(o, fees) {
+  const base = fees.commission_percent || 0, gross = +o.subtotal || 0, k = gross > 0 ? 1 - (+o.discount || 0) / gross : 1;
+  return (o.items || []).reduce((s, i) => s + i.price * i.qty * k * ((fees['comm:' + i.cat] ?? base) / 100), 0);
+}
+export async function startNotifs(uid) {
+  const b = document.createElement('div'); b.style.cssText = 'position:fixed;right:12px;bottom:78px;z-index:40;background:#0b6b3a;color:#fff;border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3)';
+  b.innerHTML = '🔔<span id=nbd style="position:absolute;top:-4px;right:-4px;background:#d62828;border-radius:10px;font-size:11px;padding:1px 6px;display:none"></span>'; document.body.appendChild(b);
+  const p = document.createElement('div'); p.style.cssText = 'position:fixed;right:12px;bottom:134px;z-index:40;width:290px;max-height:60vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.25);padding:10px;display:none'; document.body.appendChild(p);
+  let last = null;
+  const poll = async () => {
+    const { data = [] } = await sb.from('notifications').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(20), un = data.filter(n => !n.read), bd = b.querySelector('#nbd');
+    bd.style.display = un.length ? 'block' : 'none'; bd.textContent = un.length;
+    if (last !== null && un.length > last && window.Notification && Notification.permission === 'granted') new Notification(un[0].title, { body: un[0].body });
+    last = un.length; p.innerHTML = '<b>Notifications</b>' + (data.map(n => `<div style="padding:8px 0;border-bottom:1px solid #eee;${n.read ? 'color:#888' : ''}"><b>${esc(n.title)}</b><br>${esc(n.body)}</div>`).join('') || '<p>No notifications</p>'); return un;
+  };
+  b.onclick = async () => { const open = p.style.display === 'none'; p.style.display = open ? 'block' : 'none'; if (!open) return; if (window.Notification && Notification.permission === 'default') Notification.requestPermission();
+    const un = await poll(); if (un.length) { await sb.from('notifications').update({ read: true }).eq('user_id', uid).eq('read', false); setTimeout(poll, 300); } };
+  poll(); setInterval(poll, 30000);
+}

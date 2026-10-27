@@ -1,14 +1,14 @@
 <!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Vendor</title></head><body>
 <div id=auth></div><div id=main></div>
 <script type=module>
-import { brandHeader, sb, $, esc, me, authBox, upload, css, fillDistricts, fillUpazilas, getFees } from './app.js';
+import { brandHeader, sb, $, esc, me, authBox, upload, css, fillDistricts, fillUpazilas, getFees, startNotifs, commOf } from './app.js';
 document.head.insertAdjacentHTML('beforeend', css);
 document.body.insertAdjacentHTML('afterbegin', brandHeader('Vendor'));
 let CATS = ['Medicine', 'Garments - Men', 'Garments - Women', 'Garments - Kids', 'Grocery', 'Books', 'Homemade'];
 let user, shop, tab = 'home', pcat = '', edit = null;
 async function init() {
   user = await me(); if (!user) return authBox($('#auth'), 'customer', init);
-  $('#auth').innerHTML = '';
+  $('#auth').innerHTML = ''; startNotifs(user.id);
   shop = (await sb.from('shops').select('*').eq('owner', user.id).maybeSingle()).data;
   const cs = (await sb.from('categories').select('name').order('sort')).data; if (cs?.length) CATS = cs.map(c => c.name);
   shop ? (shop.verified ? render() : $('#main').innerHTML = '<h3>Waiting for admin verification…</h3>') : register();
@@ -24,7 +24,7 @@ function register() {
 async function render() {
   const [{ data: prods = [] }, { data: ords = [] }, { data: cps = [] }, { data: pays = [] }, fees, { data: info = [] }] = await Promise.all([sb.from('products').select('*').eq('shop_id', shop.id).order('created_at', { ascending: false }), sb.from('orders').select('*').eq('shop_id', shop.id).order('created_at', { ascending: false }), sb.from('coupons').select('*').eq('shop_id', shop.id), sb.from('commission_payments').select('*').eq('shop_id', shop.id).order('created_at', { ascending: false }), getFees(), sb.from('site_info').select('*')]);
   const I = Object.fromEntries(info.map(r => [r.key, r.value])), done = ords.filter(o => o.status === 'delivered'), rev = done.reduce((s, o) => s + o.subtotal - o.discount, 0);
-  const due = Math.round(rev * (fees.commission_percent || 0) / 100 - pays.filter(p => p.status === 'confirmed').reduce((s, p) => s + +p.amount, 0));
+  const due = Math.round(done.reduce((s, o) => s + commOf(o, fees), 0) - pays.filter(p => p.status === 'confirmed').reduce((s, p) => s + +p.amount, 0));
   const nav = [['home', '🏠 Home'], ['products', '📦 Products'], ['money', '💰 Commission'], ['settings', '⚙️ Settings']];
   const low = prods.filter(p => p.stock != null && p.stock <= 5);
   let body = '';
