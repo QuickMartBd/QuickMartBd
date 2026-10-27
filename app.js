@@ -14,10 +14,10 @@ export async function me() {
   return data;
 }
 export function authBox(el, role, onDone) {
-  el.innerHTML = `<h3>${t('login')} / ${t('signup')}</h3><input id=em placeholder=Email><input id=pw type=password placeholder=Password><input id=nm placeholder="Name (signup)"><button id=li>${t('login')}</button> <button id=su>${t('signup')}</button><p id=msg></p>`;
+  el.innerHTML = `<h3>${t('login')} / ${t('signup')}</h3><input id=em placeholder=Email><input id=pw type=password placeholder=Password><input id=nm placeholder="Name (signup)"><input id=rf placeholder="Referral code (optional)"><button id=li>${t('login')}</button> <button id=su>${t('signup')}</button><p id=msg></p>`;
   const em = () => el.querySelector('#em').value, pw = () => el.querySelector('#pw').value, msg = (m) => el.querySelector('#msg').textContent = m;
   el.querySelector('#li').onclick = async () => { const { error } = await sb.auth.signInWithPassword({ email: em(), password: pw() }); error ? msg(error.message) : onDone(); };
-  el.querySelector('#su').onclick = async () => { const { error } = await sb.auth.signUp({ email: em(), password: pw(), options: { data: { role, name: el.querySelector('#nm').value } } }); error ? msg(error.message) : msg('Signed up. Now press Login (confirm email first if enabled).'); };
+  el.querySelector('#su').onclick = async () => { const { error } = await sb.auth.signUp({ email: em(), password: pw(), options: { data: { role, name: el.querySelector('#nm').value, ref: el.querySelector('#rf').value.trim() } } }); error ? msg(error.message) : msg('Signed up. Now press Login (confirm email first if enabled).'); };
 }
 export async function getFees() {
   const { data } = await sb.from('settings').select('*'); const s = {}; (data || []).forEach(r => s[r.key] = +r.value); return s;
@@ -66,3 +66,8 @@ import { AREAS } from './bd_areas.js';
 export { AREAS };
 export function fillDistricts(sel, cur) { sel.innerHTML = Object.keys(AREAS).map(d => `<option ${d === cur ? 'selected' : ''}>${esc(d)}</option>`).join(''); }
 export function fillUpazilas(sel, d, cur, withAll = false) { sel.innerHTML = (withAll ? '<option value="">All areas</option>' : '') + (AREAS[d] || []).map(u => `<option ${u === cur ? 'selected' : ''}>${esc(u)}</option>`).join(''); }
+
+export async function getCats() {
+  const { data } = await sb.from('categories').select('*').order('sort');
+  return (data && data.length) ? data : [['Medicine', '💊'], ['Garments - Men', '👔'], ['Garments - Women', '👗'], ['Garments - Kids', '🧸'], ['Grocery', '🛒'], ['Books', '📚'], ['Homemade', '🍰']].map(c => ({ name: c[0], icon: c[1] }));
+}

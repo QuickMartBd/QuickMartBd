@@ -4,12 +4,13 @@
 import { brandHeader, sb, $, esc, me, authBox, upload, css, fillDistricts, fillUpazilas, getFees } from './app.js';
 document.head.insertAdjacentHTML('beforeend', css);
 document.body.insertAdjacentHTML('afterbegin', brandHeader('Vendor'));
-const CATS = ['Medicine', 'Garments - Men', 'Garments - Women', 'Garments - Kids', 'Grocery', 'Books', 'Homemade'];
+let CATS = ['Medicine', 'Garments - Men', 'Garments - Women', 'Garments - Kids', 'Grocery', 'Books', 'Homemade'];
 let user, shop, tab = 'home', pcat = '', edit = null;
 async function init() {
   user = await me(); if (!user) return authBox($('#auth'), 'customer', init);
   $('#auth').innerHTML = '';
   shop = (await sb.from('shops').select('*').eq('owner', user.id).maybeSingle()).data;
+  const cs = (await sb.from('categories').select('name').order('sort')).data; if (cs?.length) CATS = cs.map(c => c.name);
   shop ? (shop.verified ? render() : $('#main').innerHTML = '<h3>Waiting for admin verification…</h3>') : register();
 }
 function register() {
@@ -35,7 +36,7 @@ async function render() {
   }
   if (tab === 'products') {
     const e = edit || {}, list = prods.filter(p => !pcat || p.category === pcat);
-    body = `<div class=c><h4>${edit ? 'Edit product' : 'Add product'}</h4><input id=pn placeholder=Name value="${esc(e.name)}"><textarea id=pd placeholder="Description (size, material, usage)">${esc(e.description)}</textarea><input id=pp type=number placeholder=Price value="${e.price ?? ''}"><input id=po type=number placeholder="Offer price (optional)" value="${e.offer_price ?? ''}"><input id=pk type=number placeholder="Stock quantity (optional, auto sold-out at 0)" value="${e.stock ?? ''}">
+    body = `<div class=c><h4>${edit ? 'Edit product' : 'Add product'}</h4><input id=pn placeholder=Name value="${esc(e.name)}"><textarea id=pd placeholder="Description (size, material, usage)">${esc(e.description)}</textarea><input id=pp type=number placeholder=Price value="${e.price ?? ''}"><input id=po type=number placeholder="Offer price (optional)" value="${e.offer_price ?? ''}"><input id=pk type=number placeholder="Stock quantity (optional, auto sold-out at 0)" value="${e.stock ?? ''}"><label>Offer ends (optional, flash sale)</label><input id=pe type=datetime-local value="${e.offer_ends ? new Date(new Date(e.offer_ends) - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}">
     <select id=pc>${CATS.map(c => `<option ${c === e.category ? 'selected' : ''}>${c}</option>`).join('')}</select><select id=ps><option value=local ${e.scope === 'local' ? 'selected' : ''}>Sell in my local area</option><option value=all ${e.scope === 'all' ? 'selected' : ''}>Sell all Bangladesh</option></select>
     ${e.image_url ? `<img src="${esc(e.image_url)}" style="height:70px;border-radius:8px">` : ''}<label>${edit ? 'Change photo (optional)' : 'Photo'}</label><input id=pi type=file accept=image/*><button id=pa>${edit ? 'Save changes' : 'Add product'}</button>${edit ? '<button id=pcx class=del>Cancel</button>' : ''}</div>
     <div class=tabs2><button class="${pcat ? '' : 'on'}" data-pcat="">All (${prods.length})</button>${CATS.map(c => `<button class="${pcat === c ? 'on' : ''}" data-pcat="${c}">${c} (${prods.filter(p => p.category === c).length})</button>`).join('')}</div>` +
@@ -60,7 +61,7 @@ async function render() {
   all('[data-del]', b => b.onclick = async () => { if (confirm('Delete this product?')) { await sb.from('products').delete().eq('id', b.dataset.del); render(); } });
   go('#pcx', () => { edit = null; render(); });
   go('#pa', async () => { if (!$('#pn').value.trim() || !(+$('#pp').value > 0)) return alert('Product name and price are required'); const f = $('#pi').files[0];
-    const row = { name: $('#pn').value.trim(), description: $('#pd').value, price: +$('#pp').value, offer_price: $('#po').value ? +$('#po').value : null, category: $('#pc').value, scope: $('#ps').value, stock: $('#pk').value === '' ? null : +$('#pk').value }; if (+$('#pk').value > 0) row.in_stock = true; if (f) row.image_url = await upload(f, 'products');
+    const row = { name: $('#pn').value.trim(), description: $('#pd').value, price: +$('#pp').value, offer_price: $('#po').value ? +$('#po').value : null, category: $('#pc').value, scope: $('#ps').value, stock: $('#pk').value === '' ? null : +$('#pk').value, offer_ends: $('#pe').value ? new Date($('#pe').value).toISOString() : null }; if (+$('#pk').value > 0) row.in_stock = true; if (f) row.image_url = await upload(f, 'products');
     const { error } = edit ? await sb.from('products').update(row).eq('id', edit.id) : await sb.from('products').insert({ ...row, shop_id: shop.id }); if (error) return alert(error.message); edit = null; render(); });
   go('#mr', async () => { if (!(+$('#ma').value > 0) || !$('#mt').value.trim()) return alert('Amount and TrxID required'); const { error } = await sb.from('commission_payments').insert({ shop_id: shop.id, amount: +$('#ma').value, trx_id: $('#mt').value.trim() }); error ? alert(error.message) : render(); });
   const save = async (open) => { const v = id => $(id)?.value ?? null; const p = { p_phone: v('#shp') ?? shop.phone, p_open: open, p_ot: v('#ot') ?? shop.open_time, p_ct: v('#ct') ?? shop.close_time, p_bk: v('#nb') ?? shop.bkash, p_ng: v('#nn') ?? shop.nagad, p_rk: v('#nr') ?? shop.rocket };

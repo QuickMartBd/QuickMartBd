@@ -47,12 +47,13 @@ body{padding-bottom:70px}#bn{position:fixed;bottom:0;left:0;right:0;max-width:90
 import { sb, $, esc, t, toggleLang, me, authBox, getFees, upload, AREAS, fillDistricts, fillUpazilas } from './app.js';
 import { BRAND_NAME, LOGO_URL, BANNER_URL } from './config.js';
 document.title = BRAND_NAME;
-const CATS = [['', '🏠', 'All'], ['Medicine', '💊', 'Medicine'], ['Garments - Men', '👔', "Men's"], ['Garments - Women', '👗', "Women's"], ['Garments - Kids', '🧸', 'Kids'], ['Grocery', '🛒', 'Grocery'], ['Books', '📚', 'Books'], ['Homemade', '🍰', 'Homemade']];
+let CATS = [['', '🏠', 'All'], ['Medicine', '💊', 'Medicine'], ['Garments - Men', '👔', "Men's"], ['Garments - Women', '👗', "Women's"], ['Garments - Kids', '🧸', 'Kids'], ['Grocery', '🛒', 'Grocery'], ['Books', '📚', 'Books'], ['Homemade', '🍰', 'Homemade']];
 let limit = 24, lastKey = '', BANNER = BANNER_URL, PR = [], wish = JSON.parse(localStorage.wish || '[]'), user, shop, tab = 'local', q = '', cat = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || 'Dhaka', upz = localStorage.upz || '', timer;
 const save = () => { localStorage.cart = JSON.stringify(cart); $('#cn').textContent = cart.length; };
 async function init() {
   user = await me(); shop = user ? (await sb.from('shops').select('id,verified').eq('owner', user.id).maybeSingle()).data : null; fees = await getFees();
   const bi = (await sb.from('site_info').select('*').eq('key', 'banner_url').maybeSingle()).data; if (bi?.value) BANNER = bi.value;
+  const cs = (await sb.from('categories').select('*').order('sort')).data; if (cs?.length) CATS = [['', '🏠', 'All'], ...cs.map(c => [c.name, c.icon || '🛍️', c.name])];
   zones = (await sb.from('delivery_zones').select('*')).data || [];
   $('#hd').innerHTML = `<img src="${esc(LOGO_URL)}" onerror="this.style.display='none'"><input id=q placeholder="${t('search')}…"><button class=ic id=vs>🎤</button>`;
   $('#bn').innerHTML = `<div id=nh><b>🏠</b>Home</div><div id=nc><b>🗂️</b>Categories</div><div id=cb><b>🛒<span class=bg id=cn>${cart.length}</span></b>Cart</div><div id=mo2><b>📦</b>Orders</div><div id=acc><b>👤</b>Account</div>`;
@@ -70,9 +71,9 @@ async function init() {
   $('#cb').onclick = showCart; $('#nh').onclick = () => { cat = ''; tab = 'local'; q = ''; $('#q').value = ''; $('#menu').hidden = true; load(); }; $('#nc').onclick = showCats; $('#mo2').onclick = showOrders;
   $('#acc').onclick = () => { const m = $('#menu'); m.hidden = !m.hidden; if (m.hidden) return;
     m.innerHTML = (user ? `<b>${esc(user.name || 'Account')}</b>` : `<button class=big id=si>${t('login')} / ${t('signup')}</button>`) +
-      `<div class=it id=mo>📦 ${t('orders')}</div><div class=it id=mw>❤️ Wishlist</div><div class=it id=mh>🛟 Help &amp; Feedback</div><a href="legal.html">📄 About &amp; Policies</a><div class=it id=ml>⚙️ Settings: Language EN/বাং</div><a href="vendor.html">🏪 ${shop ? 'My Shop' : 'Become a seller'}</a>` + (user ? `<div class=it id=mx>🚪 ${t('logout')}</div>` : '');
+      `<div class=it id=mo>📦 ${t('orders')}</div><div class=it id=mw>❤️ Wishlist</div><div class=it id=mh>🛟 Help &amp; Feedback</div><div class=it id=mi>🎁 Invite friends</div><a href="legal.html">📄 About &amp; Policies</a><div class=it id=ml>⚙️ Settings: Language EN/বাং</div><a href="vendor.html">🏪 ${shop ? 'My Shop' : 'Become a seller'}</a>` + (user ? `<div class=it id=mx>🚪 ${t('logout')}</div>` : '');
     if ($('#si')) $('#si').onclick = () => { m.hidden = true; authBox($('#auth'), 'customer', () => location.reload()); };
-    $('#mo').onclick = () => { m.hidden = true; showOrders(); }; $('#mw').onclick = () => { m.hidden = true; showWish(); }; $('#mh').onclick = () => { m.hidden = true; showHelp(); }; $('#ml').onclick = toggleLang;
+    $('#mo').onclick = () => { m.hidden = true; showOrders(); }; $('#mw').onclick = () => { m.hidden = true; showWish(); }; $('#mh').onclick = () => { m.hidden = true; showHelp(); }; $('#mi').onclick = () => { if (!user) { m.hidden = true; return authBox($('#auth'), 'customer', () => location.reload()); } const c = user.id.slice(0, 8).toUpperCase(), tx = `Join QuickMart BD: ${location.origin + location.pathname} and use my referral code ${c}`; navigator.share ? navigator.share({ text: tx }) : alert(tx); }; $('#ml').onclick = toggleLang;
     if ($('#mx')) $('#mx').onclick = async () => { await sb.auth.signOut(); location.reload(); }; };
   load();
 }
@@ -84,6 +85,8 @@ async function showHelp() {
   $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>Help &amp; Feedback</h3><select id=tk><option value=feedback>Feedback / suggestion</option><option value=support>Problem / support</option></select><textarea id=tm rows=4 placeholder="Write here…"></textarea><button id=ts>Send</button><h4>My messages</h4>${data.map(x => `<div class=card><span class=pill>${esc(x.kind)}</span> <span class=pill>${x.status}</span><br>${esc(x.message)}${x.reply ? `<br><b>Reply:</b> ${esc(x.reply)}` : ''}</div>`).join('') || '<p>No messages yet</p>'}`;
   $('#ts').onclick = async () => { if (!$('#tm').value.trim()) return; const { error } = await sb.from('tickets').insert({ user_id: user.id, kind: $('#tk').value, message: $('#tm').value.trim() }); error ? alert(error.message) : showHelp(); };
 }
+function fixOffers(a) { a.forEach(p => { if (p.offer_ends && new Date(p.offer_ends) < new Date()) p.offer_price = null; }); }
+function left(t) { const m = Math.max(0, Math.floor((new Date(t) - new Date()) / 60000)); return m >= 1440 ? Math.floor(m / 1440) + 'd ' + Math.floor(m % 1440 / 60) + 'h left' : Math.floor(m / 60) + 'h ' + m % 60 + 'm left'; }
 function isOpenNow(s) { if (s.is_open === false) return false; if (!s.open_time || !s.close_time) return true; const d = new Date(), m = d.getHours() * 60 + d.getMinutes(), f = x => +x.slice(0, 2) * 60 + +x.slice(3, 5), a = f(s.open_time), b = f(s.close_time); return a <= b ? m >= a && m < b : m >= a || m < b; }
 function addCart(p) { const i = cart.find(x => x.id === p.id); i ? i.qty++ : cart.push({ id: p.id, name: p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 }); save(); }
 function track(s) { if (s === 'cancelled') return '❌ Cancelled'; if (s === 'awaiting_customer') return '⏳ Waiting for your confirmation'; const i = ['pending', 'accepted', 'shipped', 'delivered'].indexOf(s); return ['Ordered', 'Accepted', 'Shipped', 'Delivered'].map((x, k) => (k <= i ? '🟢 ' : '⚪ ') + x).join(' → '); }
@@ -97,25 +100,26 @@ function detail(id) {
   $('#ds').onclick = () => { const u = location.origin + location.pathname; navigator.share ? navigator.share({ title: p.name, url: u }) : (navigator.clipboard?.writeText(u), alert('Link copied')); };
 }
 async function showWish() {
-  const { data = [] } = wish.length ? await sb.from('products').select('*, shops(name,phone)').in('id', wish) : { data: [] }; PR = data;
+  const { data = [] } = wish.length ? await sb.from('products').select('*, shops(name,phone)').in('id', wish) : { data: [] }; PR = data; fixOffers(data);
   $('#main').innerHTML = `<h3>❤️ Wishlist</h3>${data.map(p => `<div class=card><b>${esc(p.name)}</b> ৳${p.offer_price ?? p.price} <button data-d="${p.id}">Open</button></div>`).join('') || '<p>Nothing saved yet</p>'}`;
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => detail(b.dataset.d));
 }
-function tabsHtml() { return `<div class=tabs>${cat ? `<button id=cc>✕ ${esc(cat)}</button>` : ''}${['local', 'all', 'offers'].map(x => `<button data-t=${x} class="${x === tab ? 'on' : ''}">${t(x)}</button>`).join('')}</div>`; }
+function tabsHtml() { return `<div class=tabs>${cat ? `<button id=cc>✕ ${esc(cat)}</button>` : ''}${['local', 'all', 'offers', 'flash'].map(x => `<button data-t=${x} class="${x === tab ? 'on' : ''}">${t(x)}</button>`).join('')}</div>`; }
 async function load() {
   const key = [tab, cat, q, area, upz].join('|'); if (key !== lastKey) { limit = 24; lastKey = key; }
-  let qq = sb.from('products').select('*, shops!inner(name,area,verified,phone,is_open,open_time,close_time)').eq('shops.verified', true).eq('shops.is_open', true);
+  let qq = sb.from('products').select('*, shops!inner(name,area,verified,phone,is_open,open_time,close_time,featured_until)').eq('shops.verified', true).eq('shops.is_open', true);
   if (tab === 'local') { qq = qq.eq('scope', 'local').eq('shops.area', area); if (upz) qq = qq.eq('shops.upazila', upz); }
   if (tab === 'all') qq = qq.eq('scope', 'all');
   if (tab === 'offers') qq = qq.not('offer_price', 'is', null);
+  if (tab === 'flash') qq = qq.not('offer_ends', 'is', null).gt('offer_ends', new Date().toISOString());
   if (cat) qq = qq.eq('category', cat);
   if (q) qq = qq.ilike('name', `%${q}%`);
-  const { data: all = [] } = await qq.order('created_at', { ascending: false }).limit(limit); const data = all.filter(p => isOpenNow(p.shops));
+  const { data: all = [] } = await qq.order('created_at', { ascending: false }).limit(limit); fixOffers(all); const feat = s => s.featured_until && new Date(s.featured_until) > new Date(); const data = all.filter(p => isOpenNow(p.shops) && (tab !== 'offers' || p.offer_price)).sort((a, b) => feat(b.shops) - feat(a.shops));
   PR = data;
   const hero = (BANNER && !q && !cat) ? `<img class=hero src="${esc(BANNER)}" onerror="this.style.display='none'">` : '';
   $('#main').innerHTML = hero + tabsHtml() + `<div class=g>${data.map(p => { const pct = p.offer_price ? Math.round((1 - p.offer_price / p.price) * 100) : 0;
     return `<div class=pc>${p.image_url ? `<img src="${esc(p.image_url)}">` : `<div class=ph>${esc((p.name || '?')[0])}</div>`}${p.in_stock ? '' : `<div class=so>${t('soldout')}</div>`}
-    <div class=pb><div class=nm data-d='${p.id}'>${esc(p.name)}</div><div class=sh>${esc(p.shops.name)}</div>
+    <div class=pb><div class=nm data-d='${p.id}'>${esc(p.name)}</div><div class=sh>${feat(p.shops) ? '⭐ ' : ''}${esc(p.shops.name)}</div>${p.offer_price && p.offer_ends ? `<div class=sh style="color:#d62828">⏱ ${left(p.offer_ends)}</div>` : ''}
     <div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s><span class=off>${pct}% OFF</span>` : ''}</div>
     <div class=row><span class=rv data-r='${p.id}'>★ Reviews</span>${p.in_stock ? `<button class=add data-a='${p.id}'>🛒</button>` : ''}</div></div></div>`; }).join('') || '<p>No products here yet</p>'}</div>${all.length >= limit ? '<button id=lm style="width:100%;margin:10px 0">Load more</button>' : ''}`;
   if ($('#cc')) $('#cc').onclick = () => { cat = ''; load(); };
@@ -150,15 +154,15 @@ async function showCart() {
     if (!cart.length) return; if (!$('#ph').value.trim() || !$('#ad').value.trim()) return alert('Phone and address are required'); const pm = $('#pm').value; if (pm !== 'cod' && (shops.length > 1 || !$('#tx').value.trim() || !$('#pf').value.trim())) return alert(shops.length > 1 ? 'Online payment works for one shop at a time' : 'Enter the TrxID and the number you paid from'); const code = $('#cp').value.trim(); let cpn = null;
     if (code) { cpn = (await sb.from('coupons').select('*').eq('code', code).maybeSingle()).data; if (!cpn) return alert('Invalid coupon'); }
     for (const sid of shops) { const items = cart.filter(i => i.shop_id === sid); const s = items.reduce((a, i) => a + i.price * i.qty, 0); const scope = items.some(i => i.scope === 'all') ? 'all' : 'local';
-      const pct = cpn && cpn.shop_id === sid ? +cpn.percent : 0;
+      const pct = cpn && (cpn.shop_id === sid || cpn.shop_id === null) ? +cpn.percent : 0;
       const { error } = await sb.from('orders').insert({ customer: user.id, shop_id: sid, items, subtotal: s, discount: s * pct / 100, delivery_fee: feeOf(scope), payment: pm, pay_method: pm, pay_status: pm === 'cod' ? 'cod' : 'submitted', trx_id: pm === 'cod' ? null : $('#tx').value.trim(), pay_from: pm === 'cod' ? null : $('#pf').value.trim(), address: $('#ad').value, phone: $('#ph').value, area, upazila: upz, scope }); if (error) return alert(error.message); }
     cart = []; save(); alert('Order placed'); showOrders();
   };
 }
 async function showOrders() {
   if (!user) return authBox($('#auth'), 'customer', () => location.reload());
-  const { data = [] } = await sb.from('orders').select('*, shops(name)').eq('customer', user.id).order('created_at', { ascending: false });
-  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('orders')}</h3>${data.map(o => `<div class=card><b>${esc(o.shops?.name)}</b> <br>${track(o.status)}<br>${{ submitted: '⏳ Payment under review', paid: '✅ Paid', rejected: '❌ Payment rejected, contact the shop' }[o.pay_status] || ''}<br>Total ৳${o.subtotal - o.discount + +o.delivery_fee}
+  const { data = [] } = await sb.from('orders').select('*, shops(name), riders(name,phone)').eq('customer', user.id).order('created_at', { ascending: false });
+  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('orders')}</h3>${data.map(o => `<div class=card><b>${esc(o.shops?.name)}</b> <br>${track(o.status)}${o.riders ? `<br>🛵 ${esc(o.riders.name)} · <a href="tel:${esc(o.riders.phone)}">${esc(o.riders.phone)}</a>` : ''}<br>${{ submitted: '⏳ Payment under review', paid: '✅ Paid', rejected: '❌ Payment rejected, contact the shop' }[o.pay_status] || ''}<br>Total ৳${o.subtotal - o.discount + +o.delivery_fee}
   ${o.status === 'delivered' ? `<br><button data-rt=${o.id}>Request return</button>` : ''}
   ${o.status === 'awaiting_customer' ? `<p>Vendor changed delivery fee: ৳${o.delivery_fee} → ৳${o.new_fee}</p><button data-ok=${o.id}>Accept</button> <button data-no=${o.id} style="background:#d62828">Cancel order</button>` : ''}</div>`).join('') || '<p>No orders yet</p>'}`;
   document.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { const o = data.find(x => x.id === b.dataset.ok); await sb.from('orders').update({ delivery_fee: o.new_fee, status: 'accepted' }).eq('id', o.id); showOrders(); });
