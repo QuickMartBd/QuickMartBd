@@ -1,53 +1,72 @@
 <!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Vendor</title></head><body>
 <div id=auth></div><div id=main></div>
 <script type=module>
-import { brandHeader, sb, $, esc, me, authBox, upload, css, fillDistricts, fillUpazilas } from './app.js';
+import { brandHeader, sb, $, esc, me, authBox, upload, css, fillDistricts, fillUpazilas, getFees } from './app.js';
 document.head.insertAdjacentHTML('beforeend', css);
 document.body.insertAdjacentHTML('afterbegin', brandHeader('Vendor'));
-let user, shop;
+const CATS = ['Medicine', 'Garments - Men', 'Garments - Women', 'Garments - Kids', 'Grocery', 'Books', 'Homemade'];
+let user, shop, tab = 'home', pcat = '', edit = null;
 async function init() {
   user = await me(); if (!user) return authBox($('#auth'), 'customer', init);
   $('#auth').innerHTML = '';
   shop = (await sb.from('shops').select('*').eq('owner', user.id).maybeSingle()).data;
-  shop ? dash() : register();
+  shop ? (shop.verified ? render() : $('#main').innerHTML = '<h3>Waiting for admin verification…</h3>') : register();
 }
-async function register() {
-  const zones = (await sb.from('delivery_zones').select('area')).data || [];
-  $('#main').innerHTML = `<h3>Register shop</h3><input id=sn placeholder="Shop name"><label>District</label><select id=sa></select><label>Upazila / Thana</label><select id=su></select><input id=nid placeholder="NID number"><input id=sp type=tel placeholder="Shop phone (customers will call)">
+function register() {
+  $('#main').innerHTML = `<h3>Become a seller</h3><input id=sn placeholder="Shop name"><label>District</label><select id=sa></select><label>Upazila / Thana</label><select id=su></select><input id=nid placeholder="NID number"><input id=sp type=tel placeholder="Shop phone (customers will call)">
   <label>Your photo (required)</label><input id=f1 type=file accept=image/*><label>Signboard photo (required)</label><input id=f2 type=file accept=image/*><button id=go>Submit for verification</button>`;
   fillDistricts($('#sa'), 'Dhaka'); fillUpazilas($('#su'), 'Dhaka'); $('#sa').onchange = () => fillUpazilas($('#su'), $('#sa').value);
   $('#go').onclick = async () => { const a = $('#f1').files[0], b = $('#f2').files[0]; if (!a || !b || !$('#sn').value || !$('#nid').value || !$('#sp').value) return alert('All fields and both photos are required');
     const { error } = await sb.from('shops').insert({ owner: user.id, name: $('#sn').value, area: $('#sa').value, upazila: $('#su').value, nid_no: $('#nid').value, phone: $('#sp').value, photo_url: await upload(a, 'owners'), signboard_url: await upload(b, 'signs') });
     error ? alert(error.message) : init(); };
 }
-async function dash() {
-  if (!shop.verified) return $('#main').innerHTML = '<h3>Waiting for admin verification…</h3>';
-  const [{ data: prods = [] }, { data: ords = [] }, { data: cps = [] }] = await Promise.all([sb.from('products').select('*').eq('shop_id', shop.id), sb.from('orders').select('*').eq('shop_id', shop.id).order('created_at', { ascending: false }), sb.from('coupons').select('*').eq('shop_id', shop.id)]);
-  const done = ords.filter(o => o.status === 'delivered'), rev = done.reduce((s, o) => s + o.subtotal - o.discount, 0);
-  const sold = {}; done.forEach(o => o.items.forEach(i => sold[i.name] = (sold[i.name] || 0) + i.qty)); const best = Object.entries(sold).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const mon = {}; done.forEach(o => { const k = o.created_at.slice(0, 7); mon[k] = (mon[k] || 0) + o.subtotal - o.discount; });
-  $('#main').innerHTML = `<h2>${esc(shop.name)}</h2><div class=stats><div><b>৳${rev}</b>Delivered revenue</div><div><b>${ords.length}</b>Orders</div><div><b>${prods.length}</b>Products</div><div><b>${ords.filter(o => o.status === 'pending').length}</b>Pending</div></div><div class=c>Shop is <b>${shop.is_open === false ? 'CLOSED' : 'OPEN'}</b> <button id=tg>${shop.is_open === false ? 'Open shop' : 'Close shop'}</button><input id=shp type=tel value="${esc(shop.phone)}" placeholder="Shop phone"><button id=sv>Save phone</button></div><p>Monthly: ${Object.entries(mon).map(([k, v]) => `${k}: ৳${v}`).join(' | ') || '-'}<br>Best sellers: ${best.map(b => `${esc(b[0])} (${b[1]})`).join(', ') || '-'}</p>
-  <h3>Add product</h3><input id=pn placeholder=Name><textarea id=pd placeholder="Description (size, material, usage)"></textarea><input id=pp type=number placeholder=Price><input id=po type=number placeholder="Offer price (optional → goes to Offers)">
-  <select id=pc><option>Medicine</option><option>Garments - Men</option><option>Garments - Women</option><option>Garments - Kids</option><option>Grocery</option><option>Books</option><option>Homemade</option></select>
-  <select id=ps><option value=local>Sell in my local area</option><option value=all>Sell all Bangladesh</option></select><input id=pi type=file accept=image/*><button id=pa>Add</button>
-  <h3>Products</h3>${prods.map(p => `<div class=c><b>${esc(p.name) || '(no name)'}</b> ৳${p.price} ${p.in_stock ? '' : '<b style=color:#d62828>(SOLD OUT)</b>'}<br><button data-s=${p.id} data-v=${p.in_stock}>${p.in_stock ? 'Mark sold out' : 'Back in stock'}</button><button data-ed=${p.id}>Edit</button><button class=del data-del=${p.id}>Delete</button></div>`).join('')}
-  <h3>Coupons</h3>${cps.map(c => `<div>${esc(c.code)} -${c.percent}%</div>`).join('')}<input id=cc placeholder=CODE><input id=cpc type=number placeholder="% off"><button id=ca>Create coupon</button>
-  <h3>Orders</h3>${ords.map(o => `<div class=c>${o.status} · ${o.items.map(i => `${esc(i.name)}x${i.qty}`).join(', ')}<br>${esc(o.address)} · ${o.phone ? `<a href="tel:${esc(o.phone)}">📞 ${esc(o.phone)}</a>` : ''} · fee ৳${o.delivery_fee}
-  ${o.status === 'pending' ? `<br><input id=nf${o.id} type=number placeholder="Delivery fee (blank = keep)"><button data-ac=${o.id}>Accept</button>` : ''}
-  ${o.status === 'accepted' ? `<button data-st=${o.id} data-n=shipped>Shipped</button>` : ''}${o.status === 'shipped' ? `<button data-st=${o.id} data-n=delivered>Delivered</button>` : ''}</div>`).join('')}`;
-  $('#pa').onclick = async () => { if (!$('#pn').value.trim() || !(+$('#pp').value > 0)) return alert('Product name and price are required'); const f = $('#pi').files[0]; const { error } = await sb.from('products').insert({ shop_id: shop.id, name: $('#pn').value, description: $('#pd').value, price: +$('#pp').value, offer_price: $('#po').value ? +$('#po').value : null, category: $('#pc').value, scope: $('#ps').value, image_url: f ? await upload(f, 'products') : null }); error ? alert(error.message) : dash(); };
-  document.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => { await sb.from('products').update({ in_stock: b.dataset.v !== 'true' }).eq('id', b.dataset.s); dash(); });
-  document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (confirm('Delete this product?')) { await sb.from('products').delete().eq('id', b.dataset.del); dash(); } });
-  const upd = async (open, phone) => { const { error } = await sb.rpc('update_my_shop', { p_phone: phone, p_open: open }); if (error) return alert(error.message); shop.is_open = open; shop.phone = phone; dash(); };
-  $('#tg').onclick = () => upd(shop.is_open === false, $('#shp').value);
-  $('#sv').onclick = () => upd(shop.is_open !== false, $('#shp').value);
-  document.querySelectorAll('[data-ed]').forEach(b => b.onclick = async () => { const p = prods.find(x => x.id === b.dataset.ed); const n = prompt('Name', p.name); if (n === null) return; const pr = prompt('Price', p.price); if (pr === null) return; const of = prompt('Offer price (blank = none)', p.offer_price ?? ''); if (of === null) return;
-    await sb.from('products').update({ name: n.trim() || p.name, price: +pr || p.price, offer_price: of === '' ? null : +of }).eq('id', p.id); dash(); });
-  $('#ca').onclick = async () => { const { error } = await sb.from('coupons').insert({ code: $('#cc').value, shop_id: shop.id, percent: +$('#cpc').value }); error ? alert(error.message) : dash(); };
-  document.querySelectorAll('[data-ac]').forEach(b => b.onclick = async () => { const o = ords.find(x => x.id === b.dataset.ac); const v = $('#nf' + o.id).value; const nf = v === '' ? +o.delivery_fee : +v;
-    const upd = nf > +o.delivery_fee ? { new_fee: nf, status: 'awaiting_customer' } : { delivery_fee: nf, status: 'accepted' };
-    await sb.from('orders').update(upd).eq('id', o.id); dash(); });
-  document.querySelectorAll('[data-st]').forEach(b => b.onclick = async () => { await sb.from('orders').update({ status: b.dataset.n }).eq('id', b.dataset.st); dash(); });
+async function render() {
+  const [{ data: prods = [] }, { data: ords = [] }, { data: cps = [] }, { data: pays = [] }, fees, { data: info = [] }] = await Promise.all([sb.from('products').select('*').eq('shop_id', shop.id).order('created_at', { ascending: false }), sb.from('orders').select('*').eq('shop_id', shop.id).order('created_at', { ascending: false }), sb.from('coupons').select('*').eq('shop_id', shop.id), sb.from('commission_payments').select('*').eq('shop_id', shop.id).order('created_at', { ascending: false }), getFees(), sb.from('site_info').select('*')]);
+  const I = Object.fromEntries(info.map(r => [r.key, r.value])), done = ords.filter(o => o.status === 'delivered'), rev = done.reduce((s, o) => s + o.subtotal - o.discount, 0);
+  const due = Math.round(rev * (fees.commission_percent || 0) / 100 - pays.filter(p => p.status === 'confirmed').reduce((s, p) => s + +p.amount, 0));
+  const nav = [['home', '🏠 Home'], ['products', '📦 Products'], ['money', '💰 Commission'], ['settings', '⚙️ Settings']];
+  let body = '';
+  if (tab === 'home') {
+    const pay = o => o.pay_status === 'submitted' ? `<br>💳 ${esc(o.pay_method)} · TrxID <b>${esc(o.trx_id)}</b> · from ${esc(o.pay_from)}<br><button data-pc=${o.id}>Confirm payment</button><button class=del data-pr=${o.id}>Reject</button>` : o.pay_status === 'paid' ? '<br>✅ Paid' : o.pay_status === 'rejected' ? '<br>❌ Payment rejected' : '<br>💵 Cash on delivery';
+    const ok = o => !o.pay_status || o.pay_status === 'cod' || o.pay_status === 'paid';
+    body = `<div class=stats><div class=hl><b>৳${rev}</b>Delivered revenue</div><div><b>${ords.length}</b>Orders</div><div><b>${prods.length}</b>Products</div><div><b>${ords.filter(o => o.status === 'pending').length}</b>Pending</div></div><h3>Orders</h3>` +
+      (ords.map(o => `<div class=c><span class=pill>${o.status}</span> ${o.items.map(i => `${esc(i.name)}×${i.qty}`).join(', ')}<br>${esc(o.address)} · ${o.phone ? `<a href="tel:${esc(o.phone)}">📞 ${esc(o.phone)}</a>` : ''} · fee ৳${o.delivery_fee}${pay(o)}
+      ${o.status === 'pending' && ok(o) ? `<br><input id=nf${o.id} type=number placeholder="Delivery fee (blank = keep)"><button data-ac=${o.id}>Accept order</button>` : ''}${o.status === 'accepted' ? `<button data-st=${o.id} data-n=shipped>Mark shipped</button>` : ''}${o.status === 'shipped' ? `<button data-st=${o.id} data-n=delivered>Mark delivered</button>` : ''}</div>`).join('') || '<p>No orders yet</p>');
+  }
+  if (tab === 'products') {
+    const e = edit || {}, list = prods.filter(p => !pcat || p.category === pcat);
+    body = `<div class=c><h4>${edit ? 'Edit product' : 'Add product'}</h4><input id=pn placeholder=Name value="${esc(e.name)}"><textarea id=pd placeholder="Description (size, material, usage)">${esc(e.description)}</textarea><input id=pp type=number placeholder=Price value="${e.price ?? ''}"><input id=po type=number placeholder="Offer price (optional)" value="${e.offer_price ?? ''}">
+    <select id=pc>${CATS.map(c => `<option ${c === e.category ? 'selected' : ''}>${c}</option>`).join('')}</select><select id=ps><option value=local ${e.scope === 'local' ? 'selected' : ''}>Sell in my local area</option><option value=all ${e.scope === 'all' ? 'selected' : ''}>Sell all Bangladesh</option></select>
+    ${e.image_url ? `<img src="${esc(e.image_url)}" style="height:70px;border-radius:8px">` : ''}<label>${edit ? 'Change photo (optional)' : 'Photo'}</label><input id=pi type=file accept=image/*><button id=pa>${edit ? 'Save changes' : 'Add product'}</button>${edit ? '<button id=pcx class=del>Cancel</button>' : ''}</div>
+    <div class=tabs2><button class="${pcat ? '' : 'on'}" data-pcat="">All (${prods.length})</button>${CATS.map(c => `<button class="${pcat === c ? 'on' : ''}" data-pcat="${c}">${c} (${prods.filter(p => p.category === c).length})</button>`).join('')}</div>` +
+      (list.map(p => `<div class=c style="display:flex;gap:10px">${p.image_url ? `<img src="${esc(p.image_url)}" style="width:80px;height:80px;object-fit:cover;border-radius:8px">` : ''}<div style="flex:1"><b>${esc(p.name)}</b> ${p.in_stock ? '' : '<span class=pill style=background:#fde;color:#d62828>SOLD OUT</span>'}<br><small>${esc(p.category)} · ${p.scope === 'all' ? 'All Bangladesh' : 'Local'}</small><br>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s>` : ''}<br><small>${esc(p.description)}</small><br>
+      <button data-ed=${p.id}>Edit</button><button data-s=${p.id} data-v=${p.in_stock}>${p.in_stock ? 'Sold out' : 'In stock'}</button><button class=del data-del=${p.id}>Delete</button></div></div>`).join('') || '<p>No products here</p>');
+  }
+  if (tab === 'money') body = `<div class=stats><div class=hl><b>৳${due}</b>Commission due to admin (${fees.commission_percent}%)</div><div><b>৳${rev}</b>Delivered sales</div></div><div class=c><h4>Pay commission</h4>Send to admin: bKash <b>${esc(I.admin_bkash) || '-'}</b> · Nagad <b>${esc(I.admin_nagad) || '-'}</b> · Rocket <b>${esc(I.admin_rocket) || '-'}</b>
+    <input id=ma type=number placeholder=Amount value="${due > 0 ? due : ''}"><input id=mt placeholder="Transaction ID (TrxID)"><button id=mr>Send payment request</button></div><h4>History</h4>${pays.map(p => `<div class=c>৳${p.amount} · ${esc(p.trx_id)} · <span class=pill>${p.status}</span></div>`).join('') || '<p>No payments yet</p>'}`;
+  if (tab === 'settings') body = `<div class=c><h4>Shop status</h4>Shop is <b>${shop.is_open === false ? 'CLOSED' : 'OPEN'}</b> <button id=tg>${shop.is_open === false ? 'Open shop' : 'Close shop'}</button><label>Opening time</label><input id=ot type=time value="${esc(shop.open_time)}"><label>Closing time</label><input id=ct type=time value="${esc(shop.close_time)}"><small>Outside these hours the shop is hidden from customers automatically.</small></div>
+    <div class=c><h4>Contact &amp; payment numbers</h4><input id=shp type=tel placeholder="Shop phone" value="${esc(shop.phone)}"><input id=nb type=tel placeholder="bKash number" value="${esc(shop.bkash)}"><input id=nn type=tel placeholder="Nagad number" value="${esc(shop.nagad)}"><input id=nr type=tel placeholder="Rocket number" value="${esc(shop.rocket)}"><button id=sv>Save settings</button></div>
+    <div class=c><h4>Coupons</h4>${cps.map(c => `<div>${esc(c.code)} -${c.percent}%</div>`).join('')}<input id=cc placeholder=CODE><input id=cpc type=number placeholder="% off"><button id=ca>Create coupon</button></div>`;
+  $('#main').innerHTML = `<h2>${esc(shop.name)}</h2><div class=tabs2>${nav.map(n => `<button class="${tab === n[0] ? 'on' : ''}" data-tab=${n[0]}>${n[1]}</button>`).join('')}</div>${body}`;
+  const go = (id, fn) => { const el = $(id); if (el) el.onclick = fn; }, all = (s, fn) => document.querySelectorAll(s).forEach(fn), up = (t, id, u) => sb.from(t).update(u).eq('id', id).then(render);
+  all('[data-tab]', b => b.onclick = () => { tab = b.dataset.tab; edit = null; render(); });
+  all('[data-pcat]', b => b.onclick = () => { pcat = b.dataset.pcat; render(); });
+  all('[data-pc]', b => b.onclick = () => up('orders', b.dataset.pc, { pay_status: 'paid' }));
+  all('[data-pr]', b => b.onclick = () => up('orders', b.dataset.pr, { pay_status: 'rejected' }));
+  all('[data-st]', b => b.onclick = () => up('orders', b.dataset.st, { status: b.dataset.n }));
+  all('[data-ac]', b => b.onclick = () => { const o = ords.find(x => x.id === b.dataset.ac), v = $('#nf' + o.id).value, nf = v === '' ? +o.delivery_fee : +v; up('orders', o.id, nf > +o.delivery_fee ? { new_fee: nf, status: 'awaiting_customer' } : { delivery_fee: nf, status: 'accepted' }); });
+  all('[data-ed]', b => b.onclick = () => { edit = prods.find(x => x.id === b.dataset.ed); render(); scrollTo(0, 0); });
+  all('[data-s]', b => b.onclick = () => up('products', b.dataset.s, { in_stock: b.dataset.v !== 'true' }));
+  all('[data-del]', b => b.onclick = async () => { if (confirm('Delete this product?')) { await sb.from('products').delete().eq('id', b.dataset.del); render(); } });
+  go('#pcx', () => { edit = null; render(); });
+  go('#pa', async () => { if (!$('#pn').value.trim() || !(+$('#pp').value > 0)) return alert('Product name and price are required'); const f = $('#pi').files[0];
+    const row = { name: $('#pn').value.trim(), description: $('#pd').value, price: +$('#pp').value, offer_price: $('#po').value ? +$('#po').value : null, category: $('#pc').value, scope: $('#ps').value }; if (f) row.image_url = await upload(f, 'products');
+    const { error } = edit ? await sb.from('products').update(row).eq('id', edit.id) : await sb.from('products').insert({ ...row, shop_id: shop.id }); if (error) return alert(error.message); edit = null; render(); });
+  go('#mr', async () => { if (!(+$('#ma').value > 0) || !$('#mt').value.trim()) return alert('Amount and TrxID required'); const { error } = await sb.from('commission_payments').insert({ shop_id: shop.id, amount: +$('#ma').value, trx_id: $('#mt').value.trim() }); error ? alert(error.message) : render(); });
+  const save = async (open) => { const v = id => $(id)?.value ?? null; const p = { p_phone: v('#shp') ?? shop.phone, p_open: open, p_ot: v('#ot') ?? shop.open_time, p_ct: v('#ct') ?? shop.close_time, p_bk: v('#nb') ?? shop.bkash, p_ng: v('#nn') ?? shop.nagad, p_rk: v('#nr') ?? shop.rocket };
+    const { error } = await sb.rpc('update_my_shop', p); if (error) return alert(error.message); Object.assign(shop, { phone: p.p_phone, is_open: open, open_time: p.p_ot, close_time: p.p_ct, bkash: p.p_bk, nagad: p.p_ng, rocket: p.p_rk }); render(); };
+  go('#tg', () => save(shop.is_open === false)); go('#sv', () => save(shop.is_open !== false));
+  go('#ca', async () => { const { error } = await sb.from('coupons').insert({ code: $('#cc').value, shop_id: shop.id, percent: +$('#cpc').value }); error ? alert(error.message) : render(); });
 }
 init();
 </script></body></html>

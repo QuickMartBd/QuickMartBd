@@ -50,7 +50,7 @@ button.del{background:var(--r)}
 .hdr img{height:44px;width:44px;object-fit:cover;border-radius:50%;border:2px solid var(--g)}
 .hdr h2{margin:0;font-size:22px}
 .ban{width:100%;max-height:170px;object-fit:cover;border-radius:14px;margin-bottom:8px}
-.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0}.stats div{background:#fff;border-radius:14px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);color:#666;font-size:13px}.stats b{display:block;font-size:22px;color:var(--g)}</style>`;
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0}.stats div{background:#fff;border-radius:14px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);color:#666;font-size:13px}.stats b{display:block;font-size:22px;color:var(--g)}.tabs2{display:flex;gap:6px;overflow-x:auto;margin:8px 0;padding-bottom:4px}.tabs2 button{background:#e8f0ea;color:var(--g);white-space:nowrap}.tabs2 button.on{background:var(--g);color:#fff}.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;background:#e8f0ea;color:var(--g)}.stats .hl{background:linear-gradient(135deg,#0b6b3a,#0e8a4b);color:#d8f2e2}.stats .hl b{color:#fff}label{font-size:13px;color:#555}</style>`;
 
 export function brandHeader(sub = '') {
   document.title = BRAND_NAME + (sub ? ' - ' + sub : '');

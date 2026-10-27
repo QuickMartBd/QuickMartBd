@@ -77,6 +77,7 @@ async function init() {
 }
 function setArea(d, u) { area = d; upz = u; localStorage.area = d; localStorage.upz = u; fillDistricts($('#ar'), d); fillUpazilas($('#uz'), d, u, true); load(); }
 function showCats() { $('#menu').hidden = true; $('#main').innerHTML = `<h3>Categories</h3><div class=cg>${CATS.map(c => `<div data-c="${c[0]}"><b>${c[1]}</b>${c[2]}</div>`).join('')}</div>`; document.querySelectorAll('.cg div').forEach(d => d.onclick = () => { cat = d.dataset.c; load(); }); }
+function isOpenNow(s) { if (s.is_open === false) return false; if (!s.open_time || !s.close_time) return true; const d = new Date(), m = d.getHours() * 60 + d.getMinutes(), f = x => +x.slice(0, 2) * 60 + +x.slice(3, 5), a = f(s.open_time), b = f(s.close_time); return a <= b ? m >= a && m < b : m >= a || m < b; }
 function addCart(p) { const i = cart.find(x => x.id === p.id); i ? i.qty++ : cart.push({ id: p.id, name: p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 }); save(); }
 function track(s) { if (s === 'cancelled') return '❌ Cancelled'; if (s === 'awaiting_customer') return '⏳ Waiting for your confirmation'; const i = ['pending', 'accepted', 'shipped', 'delivered'].indexOf(s); return ['Ordered', 'Accepted', 'Shipped', 'Delivered'].map((x, k) => (k <= i ? '🟢 ' : '⚪ ') + x).join(' → '); }
 function detail(id) {
@@ -95,13 +96,13 @@ async function showWish() {
 }
 function tabsHtml() { return `<div class=tabs>${cat ? `<button id=cc>✕ ${esc(cat)}</button>` : ''}${['local', 'all', 'offers'].map(x => `<button data-t=${x} class="${x === tab ? 'on' : ''}">${t(x)}</button>`).join('')}</div>`; }
 async function load() {
-  let qq = sb.from('products').select('*, shops!inner(name,area,verified,phone,is_open)').eq('shops.verified', true).eq('shops.is_open', true);
+  let qq = sb.from('products').select('*, shops!inner(name,area,verified,phone,is_open,open_time,close_time)').eq('shops.verified', true).eq('shops.is_open', true);
   if (tab === 'local') { qq = qq.eq('scope', 'local').eq('shops.area', area); if (upz) qq = qq.eq('shops.upazila', upz); }
   if (tab === 'all') qq = qq.eq('scope', 'all');
   if (tab === 'offers') qq = qq.not('offer_price', 'is', null);
   if (cat) qq = qq.eq('category', cat);
   if (q) qq = qq.ilike('name', `%${q}%`);
-  const { data = [] } = await qq.order('created_at', { ascending: false });
+  const { data: all = [] } = await qq.order('created_at', { ascending: false }); const data = all.filter(p => isOpenNow(p.shops));
   PR = data;
   const hero = (BANNER_URL && !q && !cat) ? `<img class=hero src="${esc(BANNER_URL)}" onerror="this.style.display='none'">` : '';
   $('#main').innerHTML = hero + tabsHtml() + `<div class=g>${data.map(p => { const pct = p.offer_price ? Math.round((1 - p.offer_price / p.price) * 100) : 0;
@@ -124,28 +125,31 @@ async function reviews(pid) {
   if (user) $('#rs').onclick = async () => { let photo_url = null; const f = $('#rp').files[0]; if (f) photo_url = await upload(f, 'reviews');
     const { error } = await sb.from('reviews').insert({ product_id: pid, customer: user.id, rating: +$('#rt').value, comment: $('#rc').value, photo_url }); error ? alert(error.message) : reviews(pid); };
 }
-function showCart() {
+async function showCart() {
   if (!user) { $('#main').innerHTML = ''; return authBox($('#auth'), 'customer', () => location.reload()); }
   const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const shops = [...new Set(cart.map(i => i.shop_id))];
+  const si = shops.length === 1 ? ((await sb.from('shops').select('bkash,nagad,rocket').eq('id', shops[0]).maybeSingle()).data || {}) : null;
   const feeOf = (scope) => scope === 'all' ? fees.courier_fee : +(zones.find(z => z.area === area)?.fee ?? fees.default_local_fee ?? 60);
   $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('cart')}</h3>${cart.map((i, n) => `<div class=card>${esc(i.name)} x${i.qty} = ৳${i.price * i.qty} <button data-x=${n}>✕</button></div>`).join('') || 'Empty'}
-  <p><b>Subtotal ৳${sub}</b></p><input id=cp placeholder="Coupon code"><input id=ph type=tel placeholder="Phone number (required)"><input id=ad placeholder="${t('addr')}"><select id=pm><option value=cod>Cash on Delivery</option><option value=bkash>bKash</option><option value=nagad>Nagad</option><option value=card>Card</option></select>
-  <p><small>Flat delivery fee per shop-order: local ৳${feeOf('local')}, nationwide ৳${feeOf('all')}. bKash/Nagad/Card need a payment gateway (not yet integrated).</small></p><button id=pl>${t('order')}</button>`;
+  <p><b>Subtotal ৳${sub}</b></p><input id=cp placeholder="Coupon code"><input id=ph type=tel placeholder="Phone number (required)"><input id=ad placeholder="${t('addr')}"><select id=pm><option value=cod>Cash on Delivery</option><option value=bkash>bKash</option><option value=nagad>Nagad</option><option value=rocket>Rocket</option></select><div id=payb></div>
+  <p><small>Flat delivery fee per shop-order: local ৳${feeOf('local')}, nationwide ৳${feeOf('all')}.</small></p><button id=pl>${t('order')}</button>`;
+  $('#pm').onchange = () => { const m = $('#pm').value; if (m === 'cod') return $('#payb').innerHTML = ''; if (!si) return $('#payb').innerHTML = '<p>Online payment works for one shop at a time. Remove other shops or choose Cash on Delivery.</p>';
+    const fee = feeOf(cart.some(i => i.scope === 'all') ? 'all' : 'local'); $('#payb').innerHTML = `<div class=card>Send <b>৳${sub + fee}</b> (before coupon) to the shop's ${m} number: <b>${esc(si[m]) || 'not set by the shop yet'}</b><br>Then enter the details below. The shop will confirm your payment.<input id=tx placeholder="Transaction ID (TrxID)"><input id=pf type=tel placeholder="Number you sent from"></div>`; };
   document.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { cart.splice(+b.dataset.x, 1); save(); showCart(); });
   $('#pl').onclick = async () => {
-    if (!cart.length) return; if (!$('#ph').value.trim() || !$('#ad').value.trim()) return alert('Phone and address are required'); const code = $('#cp').value.trim(); let cpn = null;
+    if (!cart.length) return; if (!$('#ph').value.trim() || !$('#ad').value.trim()) return alert('Phone and address are required'); const pm = $('#pm').value; if (pm !== 'cod' && (shops.length > 1 || !$('#tx').value.trim() || !$('#pf').value.trim())) return alert(shops.length > 1 ? 'Online payment works for one shop at a time' : 'Enter the TrxID and the number you paid from'); const code = $('#cp').value.trim(); let cpn = null;
     if (code) { cpn = (await sb.from('coupons').select('*').eq('code', code).maybeSingle()).data; if (!cpn) return alert('Invalid coupon'); }
     for (const sid of shops) { const items = cart.filter(i => i.shop_id === sid); const s = items.reduce((a, i) => a + i.price * i.qty, 0); const scope = items.some(i => i.scope === 'all') ? 'all' : 'local';
       const pct = cpn && cpn.shop_id === sid ? +cpn.percent : 0;
-      const { error } = await sb.from('orders').insert({ customer: user.id, shop_id: sid, items, subtotal: s, discount: s * pct / 100, delivery_fee: feeOf(scope), payment: $('#pm').value, address: $('#ad').value, phone: $('#ph').value, area, upazila: upz, scope }); if (error) return alert(error.message); }
+      const { error } = await sb.from('orders').insert({ customer: user.id, shop_id: sid, items, subtotal: s, discount: s * pct / 100, delivery_fee: feeOf(scope), payment: pm, pay_method: pm, pay_status: pm === 'cod' ? 'cod' : 'submitted', trx_id: pm === 'cod' ? null : $('#tx').value.trim(), pay_from: pm === 'cod' ? null : $('#pf').value.trim(), address: $('#ad').value, phone: $('#ph').value, area, upazila: upz, scope }); if (error) return alert(error.message); }
     cart = []; save(); alert('Order placed'); showOrders();
   };
 }
 async function showOrders() {
   if (!user) return authBox($('#auth'), 'customer', () => location.reload());
   const { data = [] } = await sb.from('orders').select('*, shops(name)').eq('customer', user.id).order('created_at', { ascending: false });
-  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('orders')}</h3>${data.map(o => `<div class=card><b>${esc(o.shops?.name)}</b> <br>${track(o.status)}<br>Total ৳${o.subtotal - o.discount + +o.delivery_fee}
+  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('orders')}</h3>${data.map(o => `<div class=card><b>${esc(o.shops?.name)}</b> <br>${track(o.status)}<br>${{ submitted: '⏳ Payment under review', paid: '✅ Paid', rejected: '❌ Payment rejected, contact the shop' }[o.pay_status] || ''}<br>Total ৳${o.subtotal - o.discount + +o.delivery_fee}
   ${o.status === 'awaiting_customer' ? `<p>Vendor changed delivery fee: ৳${o.delivery_fee} → ৳${o.new_fee}</p><button data-ok=${o.id}>Accept</button> <button data-no=${o.id} style="background:#d62828">Cancel order</button>` : ''}</div>`).join('') || '<p>No orders yet</p>'}`;
   document.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { const o = data.find(x => x.id === b.dataset.ok); await sb.from('orders').update({ delivery_fee: o.new_fee, status: 'accepted' }).eq('id', o.id); showOrders(); });
   document.querySelectorAll('[data-no]').forEach(b => b.onclick = async () => { await sb.from('orders').update({ status: 'cancelled' }).eq('id', b.dataset.no); showOrders(); });
