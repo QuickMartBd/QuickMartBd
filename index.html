@@ -88,14 +88,14 @@ async function showHelp() {
 function fixOffers(a) { a.forEach(p => { if (p.offer_ends && new Date(p.offer_ends) < new Date()) p.offer_price = null; }); }
 function left(t) { const m = Math.max(0, Math.floor((new Date(t) - new Date()) / 60000)); return m >= 1440 ? Math.floor(m / 1440) + 'd ' + Math.floor(m % 1440 / 60) + 'h left' : Math.floor(m / 60) + 'h ' + m % 60 + 'm left'; }
 function isOpenNow(s) { if (s.is_open === false) return false; if (!s.open_time || !s.close_time) return true; const d = new Date(), m = d.getHours() * 60 + d.getMinutes(), f = x => +x.slice(0, 2) * 60 + +x.slice(3, 5), a = f(s.open_time), b = f(s.close_time); return a <= b ? m >= a && m < b : m >= a || m < b; }
-function addCart(p) { const i = cart.find(x => x.id === p.id); i ? i.qty++ : cart.push({ id: p.id, name: p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 }); save(); }
+function addCart(p, v) { const i = cart.find(x => x.id === p.id && x.v === v); i ? i.qty++ : cart.push({ id: p.id, v, name: v ? p.name + ' (' + v + ')' : p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 }); save(); }
 function track(s) { if (s === 'cancelled') return '❌ Cancelled'; if (s === 'awaiting_customer') return '⏳ Waiting for your confirmation'; const i = ['pending', 'accepted', 'shipped', 'delivered'].indexOf(s); return ['Ordered', 'Accepted', 'Shipped', 'Delivered'].map((x, k) => (k <= i ? '🟢 ' : '⚪ ') + x).join(' → '); }
 function detail(id) {
   const p = PR.find(x => x.id === id); if (!p) return; const n = (p.shops.phone || '').replace(/\D/g, ''), wa = n.startsWith('0') ? '88' + n : n, liked = wish.includes(id);
-  $('#main').innerHTML = `<button id=bk>←</button>${p.image_url ? `<img src="${esc(p.image_url)}" style="width:100%;border-radius:12px;margin-top:8px">` : ''}<h3>${esc(p.name)}</h3><div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s>` : ''}</div><p>${esc(p.description)}</p><p>🏪 ${esc(p.shops.name)}</p>
+  $('#main').innerHTML = `<button id=bk>←</button>${p.image_url ? `<img src="${esc(p.image_url)}" style="width:100%;border-radius:12px;margin-top:8px">` : ''}<h3>${esc(p.name)}</h3>${p.options ? `<select id=vr>${p.options.split(',').map(o => `<option>${esc(o.trim())}</option>`).join('')}</select>` : ''}<div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s>` : ''}</div><p>${esc(p.description)}</p><p>🏪 ${esc(p.shops.name)}</p>
   <div class=tabs>${p.in_stock ? '<button id=da>🛒 Add to cart</button>' : '<b style=color:#d62828>Sold out</b>'}<button id=dw>${liked ? '💔 Remove' : '❤️ Wishlist'}</button>${n ? `<a href="tel:${esc(p.shops.phone)}"><button>📞 Call</button></a><a href="https://wa.me/${wa}" target=_blank><button>💬 WhatsApp</button></a>` : ''}<button id=ds>🔗 Share</button><button id=dr>★ Reviews</button></div>`;
   $('#bk').onclick = load; $('#dr').onclick = () => reviews(id);
-  if ($('#da')) $('#da').onclick = () => { addCart(p); $('#da').textContent = '✓ Added'; };
+  if ($('#da')) $('#da').onclick = () => { addCart(p, $('#vr') ? $('#vr').value : null); $('#da').textContent = '✓ Added'; };
   $('#dw').onclick = () => { wish = liked ? wish.filter(x => x !== id) : [...wish, id]; localStorage.wish = JSON.stringify(wish); detail(id); };
   $('#ds').onclick = () => { const u = location.origin + location.pathname; navigator.share ? navigator.share({ title: p.name, url: u }) : (navigator.clipboard?.writeText(u), alert('Link copied')); };
 }
@@ -116,18 +116,18 @@ async function load() {
   if (q) qq = qq.ilike('name', `%${q}%`);
   const { data: all = [] } = await qq.order('created_at', { ascending: false }).limit(limit); fixOffers(all); const feat = s => s.featured_until && new Date(s.featured_until) > new Date(); const data = all.filter(p => isOpenNow(p.shops) && (tab !== 'offers' || p.offer_price)).sort((a, b) => feat(b.shops) - feat(a.shops));
   PR = data;
+  const rt = {}; if (data.length) { const { data: rv = [] } = await sb.from('reviews').select('product_id,rating').in('product_id', data.map(p => p.id)); rv.forEach(r => { (rt[r.product_id] = rt[r.product_id] || []).push(r.rating); }); }
   const hero = (BANNER && !q && !cat) ? `<img class=hero src="${esc(BANNER)}" onerror="this.style.display='none'">` : '';
   $('#main').innerHTML = hero + tabsHtml() + `<div class=g>${data.map(p => { const pct = p.offer_price ? Math.round((1 - p.offer_price / p.price) * 100) : 0;
     return `<div class=pc>${p.image_url ? `<img src="${esc(p.image_url)}">` : `<div class=ph>${esc((p.name || '?')[0])}</div>`}${p.in_stock ? '' : `<div class=so>${t('soldout')}</div>`}
-    <div class=pb><div class=nm data-d='${p.id}'>${esc(p.name)}</div><div class=sh>${feat(p.shops) ? '⭐ ' : ''}${esc(p.shops.name)}</div>${p.offer_price && p.offer_ends ? `<div class=sh style="color:#d62828">⏱ ${left(p.offer_ends)}</div>` : ''}
+    <div class=pb><div class=nm data-d='${p.id}'>${esc(p.name)}</div>${rt[p.id] ? `<div class=sh style="color:#e6a100">★ ${(rt[p.id].reduce((a, b) => a + b, 0) / rt[p.id].length).toFixed(1)} (${rt[p.id].length})</div>` : ''}<div class=sh>${feat(p.shops) ? '⭐ ' : ''}${esc(p.shops.name)}</div>${p.offer_price && p.offer_ends ? `<div class=sh style="color:#d62828">⏱ ${left(p.offer_ends)}</div>` : ''}
     <div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s><span class=off>${pct}% OFF</span>` : ''}</div>
     <div class=row><span class=rv data-r='${p.id}'>★ Reviews</span>${p.in_stock ? `<button class=add data-a='${p.id}'>🛒</button>` : ''}</div></div></div>`; }).join('') || '<p>No products here yet</p>'}</div>${all.length >= limit ? '<button id=lm style="width:100%;margin:10px 0">Load more</button>' : ''}`;
   if ($('#cc')) $('#cc').onclick = () => { cat = ''; load(); };
   if ($('#lm')) $('#lm').onclick = () => { limit += 24; load(); };
   document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; load(); });
   document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const p = data.find(x => x.id === b.dataset.a);
-    const i = cart.find(x => x.id === p.id); i ? i.qty++ : cart.push({ id: p.id, name: p.name, price: p.offer_price ?? p.price, shop_id: p.shop_id, scope: p.scope, qty: 1 });
-    save(); b.textContent = '✓'; setTimeout(() => b.textContent = '🛒', 700); });
+    if (p.options) return detail(p.id); addCart(p); b.textContent = '✓'; setTimeout(() => b.textContent = '🛒', 700); });
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => detail(b.dataset.d));
   document.querySelectorAll('[data-r]').forEach(b => b.onclick = () => reviews(b.dataset.r));
 }
@@ -147,11 +147,12 @@ async function showCart() {
   $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('cart')}</h3>${cart.map((i, n) => `<div class=card>${esc(i.name)} x${i.qty} = ৳${i.price * i.qty} <button data-x=${n}>✕</button></div>`).join('') || 'Empty'}
   <p><b>Subtotal ৳${sub}</b></p><input id=cp placeholder="Coupon code"><input id=ph type=tel placeholder="Phone number (required)"><input id=ad placeholder="${t('addr')}"><select id=pm><option value=cod>Cash on Delivery</option><option value=bkash>bKash</option><option value=nagad>Nagad</option><option value=rocket>Rocket</option></select><div id=payb></div>
   <p><small>Flat delivery fee per shop-order: local ৳${feeOf('local')}, nationwide ৳${feeOf('all')}.</small></p><button id=pl>${t('order')}</button>`;
+  $('#ph').value = localStorage.myPhone || ''; $('#ad').value = localStorage.myAddr || '';
   $('#pm').onchange = () => { const m = $('#pm').value; if (m === 'cod') return $('#payb').innerHTML = ''; if (!si) return $('#payb').innerHTML = '<p>Online payment works for one shop at a time. Remove other shops or choose Cash on Delivery.</p>';
     const fee = feeOf(cart.some(i => i.scope === 'all') ? 'all' : 'local'); $('#payb').innerHTML = `<div class=card>Send <b>৳${sub + fee}</b> (before coupon) to the shop's ${m} number: <b>${esc(si[m]) || 'not set by the shop yet'}</b><br>Then enter the details below. The shop will confirm your payment.<input id=tx placeholder="Transaction ID (TrxID)"><input id=pf type=tel placeholder="Number you sent from"></div>`; };
   document.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { cart.splice(+b.dataset.x, 1); save(); showCart(); });
   $('#pl').onclick = async () => {
-    if (!cart.length) return; if (!$('#ph').value.trim() || !$('#ad').value.trim()) return alert('Phone and address are required'); const pm = $('#pm').value; if (pm !== 'cod' && (shops.length > 1 || !$('#tx').value.trim() || !$('#pf').value.trim())) return alert(shops.length > 1 ? 'Online payment works for one shop at a time' : 'Enter the TrxID and the number you paid from'); const code = $('#cp').value.trim(); let cpn = null;
+    if (!cart.length) return; if (!$('#ph').value.trim() || !$('#ad').value.trim()) return alert('Phone and address are required'); const pm = $('#pm').value; if (pm !== 'cod' && (shops.length > 1 || !$('#tx').value.trim() || !$('#pf').value.trim())) return alert(shops.length > 1 ? 'Online payment works for one shop at a time' : 'Enter the TrxID and the number you paid from'); localStorage.myPhone = $('#ph').value; localStorage.myAddr = $('#ad').value; const code = $('#cp').value.trim(); let cpn = null;
     if (code) { cpn = (await sb.from('coupons').select('*').eq('code', code).maybeSingle()).data; if (!cpn) return alert('Invalid coupon'); }
     for (const sid of shops) { const items = cart.filter(i => i.shop_id === sid); const s = items.reduce((a, i) => a + i.price * i.qty, 0); const scope = items.some(i => i.scope === 'all') ? 'all' : 'local';
       const pct = cpn && (cpn.shop_id === sid || cpn.shop_id === null) ? +cpn.percent : 0;
@@ -163,10 +164,12 @@ async function showOrders() {
   if (!user) return authBox($('#auth'), 'customer', () => location.reload());
   const { data = [] } = await sb.from('orders').select('*, shops(name), riders(name,phone)').eq('customer', user.id).order('created_at', { ascending: false });
   $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>${t('orders')}</h3>${data.map(o => `<div class=card><b>${esc(o.shops?.name)}</b> <br>${track(o.status)}${o.riders ? `<br>🛵 ${esc(o.riders.name)} · <a href="tel:${esc(o.riders.phone)}">${esc(o.riders.phone)}</a>` : ''}<br>${{ submitted: '⏳ Payment under review', paid: '✅ Paid', rejected: '❌ Payment rejected, contact the shop' }[o.pay_status] || ''}<br>Total ৳${o.subtotal - o.discount + +o.delivery_fee}
-  ${o.status === 'delivered' ? `<br><button data-rt=${o.id}>Request return</button>` : ''}
+  ${o.status === 'delivered' ? `<br><button data-rt=${o.id}>Request return</button> <button data-ro=${o.id}>Reorder</button>` : ''}
   ${o.status === 'awaiting_customer' ? `<p>Vendor changed delivery fee: ৳${o.delivery_fee} → ৳${o.new_fee}</p><button data-ok=${o.id}>Accept</button> <button data-no=${o.id} style="background:#d62828">Cancel order</button>` : ''}</div>`).join('') || '<p>No orders yet</p>'}`;
   document.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { const o = data.find(x => x.id === b.dataset.ok); await sb.from('orders').update({ delivery_fee: o.new_fee, status: 'accepted' }).eq('id', o.id); showOrders(); });
   document.querySelectorAll('[data-no]').forEach(b => b.onclick = async () => { await sb.from('orders').update({ status: 'cancelled' }).eq('id', b.dataset.no); showOrders(); });
+  document.querySelectorAll('[data-ro]').forEach(b => b.onclick = async () => { const o = data.find(x => x.id === b.dataset.ro); const { data: ps = [] } = await sb.from('products').select('*').in('id', o.items.map(i => i.id)); let n = 0;
+    o.items.forEach(i => { const p = ps.find(x => x.id === i.id); if (p && p.in_stock) { for (let k = 0; k < i.qty; k++) addCart(p, i.v || null); n++; } }); alert(n ? 'Added to cart' : 'Items are no longer available'); });
   document.querySelectorAll('[data-rt]').forEach(b => b.onclick = async () => { const r = prompt('Why do you want to return / get a refund?'); if (!r) return; const { error } = await sb.from('tickets').insert({ user_id: user.id, kind: 'return', order_id: b.dataset.rt, message: r }); alert(error ? error.message : 'Request sent'); });
 }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
