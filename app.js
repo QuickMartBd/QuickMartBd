@@ -22,7 +22,10 @@ export function authBox(el, role, onDone) {
 export async function getFees() {
   const { data } = await sb.from('settings').select('*'); const s = {}; (data || []).forEach(r => s[r.key] = +r.value); return s;
 }
+async function shrink(file) { if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') return file; try { const img = await createImageBitmap(file), s = Math.min(1, 1000 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.8)); return new File([b], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }); } catch { return file; } }
 export async function upload(file, folder) {
+  file = await shrink(file);
   const path = `${folder}/${Date.now()}_${file.name.replace(/[^\w.]/g, '_')}`;
   const { error } = await sb.storage.from('images').upload(path, file); if (error) throw error;
   return sb.storage.from('images').getPublicUrl(path).data.publicUrl;

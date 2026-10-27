@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>About &amp; Policies</title></head><body>
+<div id=top></div>
+<script type=module>
+import { brandHeader, sb, $, esc, css } from './app.js';
+document.head.insertAdjacentHTML('beforeend', css);
+document.body.insertAdjacentHTML('afterbegin', brandHeader('Policies'));
+const { data } = await sb.from('site_info').select('*').eq('key', 'support_phone').maybeSingle();
+$('#top').innerHTML = `
+<div class=c><h3>About us</h3><p>QuickMart BD is a local marketplace connecting nearby shops and homemade-product sellers with customers, with nationwide delivery.</p></div>
+<div class=c><h3>Contact</h3><p>Support phone: <b>${esc(data?.value) || 'will be announced soon'}</b>. You can also use Help &amp; Feedback inside the app.</p></div>
+<div class=c><h3>Terms of use</h3><p>Sellers are responsible for the accuracy of their listings, prices and stock. Customers must give a correct phone number and address. Accounts that cheat or post fake information may be blocked.</p></div>
+<div class=c><h3>Privacy policy</h3><p>We collect your name, email, phone number and delivery address only to process orders. Your phone number and address are shared with the seller of the items you order. We do not sell your data.</p></div>
+<div class=c><h3>Return &amp; refund policy</h3><p>If an item is wrong or damaged, request a return from your order within the time announced by the platform. The seller and admin review each request. Refunds for mobile-money payments are made by the seller.</p></div>
+<p><small>This is a test version. The policy text is a draft and must be reviewed before the public launch.</small></p>`;
+</script></body></html>
