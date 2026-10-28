@@ -92,7 +92,7 @@ export async function startNotifs(uid) {
   poll(); setInterval(poll, 30000);
 }
 
-const EX = { 'Home': 'হোম', 'Categories': 'ক্যাটাগরি', 'Cart': 'কার্ট', 'Orders': 'অর্ডার', 'Account': 'অ্যাকাউন্ট', 'Local': 'লোকাল', 'Offers': 'অফার', 'Flash': 'ফ্ল্যাশ', 'Send': 'পাঠান', 'Reply': 'উত্তর', 'All': 'সব', 'Newest': 'নতুন', 'Email': 'ইমেইল', 'Password': 'পাসওয়ার্ড', 'Name': 'নাম', 'Price': 'দাম', 'Products': 'পণ্য', 'Settings': 'সেটিংস', 'Commission': 'কমিশন', 'Homemade': 'ঘরে বানানো', 'Grocery': 'মুদি', 'Books': 'বই', 'Medicine': 'ওষুধ', 'Kids': 'শিশু', 'Edit': 'এডিট', 'Delete': 'মুছুন', 'Accept': 'গ্রহণ', 'Submit': 'জমা দিন', 'Reviews': 'রিভিউ', 'Notifications': 'নোটিফিকেশন' };
+const EX = { 'Women': 'নারী উদ্যোক্তা', 'Home': 'হোম', 'Categories': 'ক্যাটাগরি', 'Cart': 'কার্ট', 'Orders': 'অর্ডার', 'Account': 'অ্যাকাউন্ট', 'Local': 'লোকাল', 'Offers': 'অফার', 'Flash': 'ফ্ল্যাশ', 'Send': 'পাঠান', 'Reply': 'উত্তর', 'All': 'সব', 'Newest': 'নতুন', 'Email': 'ইমেইল', 'Password': 'পাসওয়ার্ড', 'Name': 'নাম', 'Price': 'দাম', 'Products': 'পণ্য', 'Settings': 'সেটিংস', 'Commission': 'কমিশন', 'Homemade': 'ঘরে বানানো', 'Grocery': 'মুদি', 'Books': 'বই', 'Medicine': 'ওষুধ', 'Kids': 'শিশু', 'Edit': 'এডিট', 'Delete': 'মুছুন', 'Accept': 'গ্রহণ', 'Submit': 'জমা দিন', 'Reviews': 'রিভিউ', 'Notifications': 'নোটিফিকেশন' };
 const PH = { 'Add to cart': 'কার্টে যোগ করুন', 'Sold out': 'শেষ', 'Load more': 'আরও দেখুন', 'Price: low to high': 'দাম: কম থেকে বেশি', 'Price: high to low': 'দাম: বেশি থেকে কম', 'Wishlist': 'পছন্দের তালিকা', 'Help & Feedback': 'সাহায্য ও মতামত', 'About & Policies': 'আমাদের সম্পর্কে ও নীতি', 'Become a seller': 'দোকান খুলুন', 'My Shop': 'আমার দোকান', 'Settings: Language': 'সেটিংস: ভাষা', 'Shops near you': 'আপনার কাছের দোকান', 'Request return': 'ফেরতের আবেদন', 'Reorder': 'আবার অর্ডার', 'Place order': 'অর্ডার করুন', 'Cash on Delivery': 'ক্যাশ অন ডেলিভারি', 'Phone number': 'ফোন নম্বর', 'Coupon code': 'কুপন কোড', 'Subtotal': 'মোট দাম', 'Invite friends': 'বন্ধুকে আমন্ত্রণ', 'Waiting for admin verification': 'অ্যাডমিনের যাচাইয়ের অপেক্ষায়', 'Back to shop': 'দোকানে ফিরুন', 'Type a message': 'বার্তা লিখুন', 'Chat with shop': 'দোকানির সাথে চ্যাট', 'Delivered revenue': 'পৌঁছানো বিক্রি', 'Total sales': 'মোট বিক্রি', 'Pending': 'অপেক্ষমাণ', 'Add product': 'পণ্য যোগ করুন', 'Save changes': 'সেভ করুন', 'Free delivery': 'ফ্রি ডেলিভারি' };
 export function bnify() {
   if (localStorage.lang !== 'bn') return;
@@ -102,3 +102,10 @@ export function bnify() {
   let tm; new MutationObserver(() => { clearTimeout(tm); tm = setTimeout(run, 60); }).observe(document.body, { childList: true, subtree: true }); run();
 }
 bnify();
+
+export async function applyTheme() {
+  const { data } = await sb.from('site_info').select('*').eq('key', 'theme').maybeSingle();
+  const T = { eid: ['#0f6b45', 'linear-gradient(90deg,#0b6b3a,#c9a227)', '🌙 ঈদ মোবারক! ✨'], boishakh: ['#c1121f', 'linear-gradient(90deg,#c1121f,#e85d04)', '🎉 শুভ নববর্ষ! 🎊'], victory: ['#006a4e', 'linear-gradient(90deg,#006a4e,#f42a41)', '🇧🇩 বিজয় দিবসের শুভেচ্ছা'] }[data?.value];
+  if (!T) return; document.documentElement.style.setProperty('--g', T[0]); document.documentElement.style.setProperty('--g2', T[0]);
+  const d = document.createElement('div'); d.style.cssText = `background:${T[1]};color:#fff;text-align:center;padding:6px;font-weight:700;font-size:14px`; d.textContent = T[2]; document.body.prepend(d);
+}

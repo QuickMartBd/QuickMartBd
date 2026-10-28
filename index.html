@@ -44,14 +44,14 @@ body{padding-bottom:70px}#bn{position:fixed;bottom:0;left:0;right:0;max-width:90
 <header id=hd></header><div id=promo></div><div id=menu class=menu hidden></div><div id=auth style="padding:0 10px"></div>
 <div id=wrap><main id=main></main></div><nav id=bn></nav>
 <script type=module>
-import { sb, $, esc, t, toggleLang, me, authBox, getFees, upload, AREAS, fillDistricts, fillUpazilas, startNotifs } from './app.js';
+import { sb, $, esc, t, toggleLang, me, authBox, getFees, upload, AREAS, fillDistricts, fillUpazilas, startNotifs, applyTheme } from './app.js';
 import { BRAND_NAME, LOGO_URL, BANNER_URL } from './config.js';
 document.title = BRAND_NAME;
 let CATS = [['', '🏠', 'All'], ['Medicine', '💊', 'Medicine'], ['Garments - Men', '👔', "Men's"], ['Garments - Women', '👗', "Women's"], ['Garments - Kids', '🧸', 'Kids'], ['Grocery', '🛒', 'Grocery'], ['Books', '📚', 'Books'], ['Homemade', '🍰', 'Homemade']];
 let shopF = '', sortBy = 'new', pmin = '', pmax = '', limit = 24, lastKey = '', BANNER = BANNER_URL, PR = [], wish = JSON.parse(localStorage.wish || '[]'), user, shop, tab = 'local', q = '', cat = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || 'Dhaka', upz = localStorage.upz || '', timer;
 const save = () => { localStorage.cart = JSON.stringify(cart); $('#cn').textContent = cart.length; };
 async function init() {
-  user = await me(); if (user) startNotifs(user.id); shop = user ? (await sb.from('shops').select('id,verified').eq('owner', user.id).maybeSingle()).data : null; fees = await getFees();
+  applyTheme(); user = await me(); if (user) startNotifs(user.id); shop = user ? (await sb.from('shops').select('id,verified').eq('owner', user.id).maybeSingle()).data : null; fees = await getFees();
   const bi = (await sb.from('site_info').select('*').eq('key', 'banner_url').maybeSingle()).data; if (bi?.value) BANNER = bi.value;
   const cs = (await sb.from('categories').select('*').order('sort')).data; if (cs?.length) CATS = [['', '🏠', 'All'], ...cs.map(c => [c.name, c.icon || '🛍️', c.name])];
   zones = (await sb.from('delivery_zones').select('*')).data || [];
@@ -112,14 +112,15 @@ async function showWish() {
   $('#main').innerHTML = `<h3>❤️ Wishlist</h3>${data.map(p => `<div class=card><b>${esc(p.name)}</b> ৳${p.offer_price ?? p.price} <button data-d="${p.id}">Open</button></div>`).join('') || '<p>Nothing saved yet</p>'}`;
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => detail(b.dataset.d));
 }
-function tabsHtml() { return `<div class=tabs>${cat ? `<button id=cc>✕ ${esc(cat)}</button>` : ''}${['local', 'all', 'offers', 'flash'].map(x => `<button data-t=${x} class="${x === tab ? 'on' : ''}">${t(x)}</button>`).join('')}</div>`; }
+function tabsHtml() { return `<div class=tabs>${cat ? `<button id=cc>✕ ${esc(cat)}</button>` : ''}${['local', 'all', 'offers', 'flash', 'women'].map(x => `<button data-t=${x} class="${x === tab ? 'on' : ''}">${t(x)}</button>`).join('')}</div>`; }
 async function load() {
   const key = [tab, cat, q, area, upz, shopF].join('|'); if (key !== lastKey) { limit = 24; lastKey = key; }
-  let qq = sb.from('products').select('*, shops!inner(name,area,verified,phone,is_open,open_time,close_time,featured_until)').eq('shops.verified', true).eq('shops.is_open', true);
+  let qq = sb.from('products').select('*, shops!inner(name,area,verified,phone,is_open,open_time,close_time,featured_until,women_owned)').eq('shops.verified', true).eq('shops.is_open', true);
   if (tab === 'local') { qq = qq.eq('scope', 'local').eq('shops.area', area); if (upz) qq = qq.eq('shops.upazila', upz); }
   if (tab === 'all') qq = qq.eq('scope', 'all');
   if (tab === 'offers') qq = qq.not('offer_price', 'is', null);
   if (tab === 'flash') qq = qq.not('offer_ends', 'is', null).gt('offer_ends', new Date().toISOString());
+  if (tab === 'women') qq = qq.eq('shops.women_owned', true);
   if (cat) qq = qq.eq('category', cat);
   if (shopF) qq = qq.eq('shop_id', shopF);
   if (q) qq = qq.ilike('name', `%${q}%`);
@@ -129,17 +130,21 @@ async function load() {
   const rt = {}; if (data.length) { const { data: rv = [] } = await sb.from('reviews').select('product_id,rating').in('product_id', data.map(p => p.id)); rv.forEach(r => { (rt[r.product_id] = rt[r.product_id] || []).push(r.rating); }); }
   let strip = ''; if (tab === 'local') { let sq = sb.from('shops').select('id,name').eq('verified', true).eq('area', area).limit(12); if (upz) sq = sq.eq('upazila', upz); const { data: ns = [] } = await sq;
     if (ns.length) strip = `<div style="font-size:13px;font-weight:700;color:#0b6b3a">📍 Shops near you</div><div class=tabs style="overflow-x:auto;flex-wrap:nowrap">${shopF ? '<button id=sx class=del>✕ Clear</button>' : ''}${ns.map(s => `<button data-sf=${s.id} style="background:${shopF === s.id ? '#0b6b3a' : '#fff'};color:${shopF === s.id ? '#fff' : '#0b6b3a'};border:1px solid #0b6b3a;white-space:nowrap">🏪 ${esc(s.name)}</button>`).join('')}</div>`; }
+  let heroCard = ''; if (tab === 'hero') strip = '<button id=sx class=del>✕ Back</button>';
+  if (tab === 'local' && !shopF) { const { data: hi = [] } = await sb.from('site_info').select('*').in('key', ['hero_shop', 'hero_text']); const hs = hi.find(r => r.key === 'hero_shop')?.value, ht = hi.find(r => r.key === 'hero_text')?.value;
+    if (hs) { const { data: hsh } = await sb.from('shops').select('id,name').eq('id', hs).eq('verified', true).maybeSingle(); if (hsh) heroCard = `<div class=card style="border-left:4px solid #e6a100;background:#fff8e1">🏆 <b>Local Hero of the Day</b><br><b>${esc(hsh.name)}</b>${ht ? ' — ' + esc(ht) : ''}<br><button data-hero=${hsh.id}>View shop</button></div>`; } }
   const hero = (BANNER && !q && !cat) ? `<img class=hero src="${esc(BANNER)}" onerror="this.style.display='none'">` : '';
-  $('#main').innerHTML = hero + strip + tabsHtml() + `<div class=tabs><select id=so style="width:auto;margin:0"><option value=new>Newest</option><option value=lo ${sortBy === 'lo' ? 'selected' : ''}>Price: low to high</option><option value=hi ${sortBy === 'hi' ? 'selected' : ''}>Price: high to low</option></select><input id=mn type=number placeholder="Min ৳" value="${pmin}" style="width:90px;margin:0"><input id=mx type=number placeholder="Max ৳" value="${pmax}" style="width:90px;margin:0"></div>` + `<div class=g>${data.map(p => { const pct = p.offer_price ? Math.round((1 - p.offer_price / p.price) * 100) : 0;
+  $('#main').innerHTML = hero + heroCard + strip + tabsHtml() + `<div class=tabs><select id=so style="width:auto;margin:0"><option value=new>Newest</option><option value=lo ${sortBy === 'lo' ? 'selected' : ''}>Price: low to high</option><option value=hi ${sortBy === 'hi' ? 'selected' : ''}>Price: high to low</option></select><input id=mn type=number placeholder="Min ৳" value="${pmin}" style="width:90px;margin:0"><input id=mx type=number placeholder="Max ৳" value="${pmax}" style="width:90px;margin:0"></div>` + `<div class=g>${data.map(p => { const pct = p.offer_price ? Math.round((1 - p.offer_price / p.price) * 100) : 0;
     return `<div class=pc>${p.image_url ? `<img src="${esc(p.image_url)}">` : `<div class=ph>${esc((p.name || '?')[0])}</div>`}${p.in_stock ? '' : `<div class=so>${t('soldout')}</div>`}
-    <div class=pb><div class=nm data-d='${p.id}'>${esc(p.name)}</div>${rt[p.id] ? `<div class=sh style="color:#e6a100">★ ${(rt[p.id].reduce((a, b) => a + b, 0) / rt[p.id].length).toFixed(1)} (${rt[p.id].length})</div>` : ''}<div class=sh>${feat(p.shops) ? '⭐ ' : ''}${esc(p.shops.name)}</div>${p.offer_price && p.offer_ends ? `<div class=sh style="color:#d62828">⏱ ${left(p.offer_ends)}</div>` : ''}
+    <div class=pb><div class=nm data-d='${p.id}'>${esc(p.name)}</div>${rt[p.id] ? `<div class=sh style="color:#e6a100">★ ${(rt[p.id].reduce((a, b) => a + b, 0) / rt[p.id].length).toFixed(1)} (${rt[p.id].length})</div>` : ''}<div class=sh>${p.shops.women_owned ? '👩‍🍳 ' : ''}${feat(p.shops) ? '⭐ ' : ''}${esc(p.shops.name)}</div>${p.offer_price && p.offer_ends ? `<div class=sh style="color:#d62828">⏱ ${left(p.offer_ends)}</div>` : ''}
     <div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s><span class=off>${pct}% OFF</span>` : ''}</div>
     <div class=row><span class=rv data-r='${p.id}'>★ Reviews</span>${p.in_stock ? `<button class=add data-a='${p.id}'>🛒</button>` : ''}</div></div></div>`; }).join('') || '<p>No products here yet</p>'}</div>${all.length >= limit ? '<button id=lm style="width:100%;margin:10px 0">Load more</button>' : ''}`;
   if ($('#cc')) $('#cc').onclick = () => { cat = ''; load(); };
   $('#so').onchange = e => { sortBy = e.target.value; load(); }; $('#mn').onchange = e => { pmin = e.target.value; load(); }; $('#mx').onchange = e => { pmax = e.target.value; load(); };
-  document.querySelectorAll('[data-sf]').forEach(b => b.onclick = () => { shopF = b.dataset.sf; load(); }); if ($('#sx')) $('#sx').onclick = () => { shopF = ''; load(); };
+  document.querySelectorAll('[data-hero]').forEach(b => b.onclick = () => { tab = 'hero'; shopF = b.dataset.hero; load(); });
+  document.querySelectorAll('[data-sf]').forEach(b => b.onclick = () => { shopF = b.dataset.sf; load(); }); if ($('#sx')) $('#sx').onclick = () => { shopF = ''; if (tab === 'hero') tab = 'local'; load(); };
   if ($('#lm')) $('#lm').onclick = () => { limit += 24; load(); };
-  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; load(); });
+  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; shopF = ''; load(); });
   document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const p = data.find(x => x.id === b.dataset.a);
     if (p.options) return detail(p.id); addCart(p); b.textContent = '✓'; setTimeout(() => b.textContent = '🛒', 700); });
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => detail(b.dataset.d));
