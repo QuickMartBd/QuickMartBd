@@ -48,7 +48,7 @@ import { sb, $, esc, t, toggleLang, me, authBox, getFees, upload, AREAS, fillDis
 import { BRAND_NAME, LOGO_URL, BANNER_URL } from './config.js';
 document.title = BRAND_NAME;
 let CATS = [['', '🏠', 'All'], ['Medicine', '💊', 'Medicine'], ['Garments - Men', '👔', "Men's"], ['Garments - Women', '👗', "Women's"], ['Garments - Kids', '🧸', 'Kids'], ['Grocery', '🛒', 'Grocery'], ['Books', '📚', 'Books'], ['Homemade', '🍰', 'Homemade']];
-let sortBy = 'new', pmin = '', pmax = '', limit = 24, lastKey = '', BANNER = BANNER_URL, PR = [], wish = JSON.parse(localStorage.wish || '[]'), user, shop, tab = 'local', q = '', cat = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || 'Dhaka', upz = localStorage.upz || '', timer;
+let shopF = '', sortBy = 'new', pmin = '', pmax = '', limit = 24, lastKey = '', BANNER = BANNER_URL, PR = [], wish = JSON.parse(localStorage.wish || '[]'), user, shop, tab = 'local', q = '', cat = '', cart = JSON.parse(localStorage.cart || '[]'), zones = [], fees = {}, area = localStorage.area || 'Dhaka', upz = localStorage.upz || '', timer;
 const save = () => { localStorage.cart = JSON.stringify(cart); $('#cn').textContent = cart.length; };
 async function init() {
   user = await me(); if (user) startNotifs(user.id); shop = user ? (await sb.from('shops').select('id,verified').eq('owner', user.id).maybeSingle()).data : null; fees = await getFees();
@@ -79,6 +79,14 @@ async function init() {
 }
 function setArea(d, u) { area = d; upz = u; localStorage.area = d; localStorage.upz = u; fillDistricts($('#ar'), d); fillUpazilas($('#uz'), d, u, true); load(); }
 function showCats() { $('#menu').hidden = true; $('#main').innerHTML = `<h3>Categories</h3><div class=cg>${CATS.map(c => `<div data-c="${c[0]}"><b>${c[1]}</b>${c[2]}</div>`).join('')}</div>`; document.querySelectorAll('.cg div').forEach(d => d.onclick = () => { cat = d.dataset.c; load(); }); }
+async function showChat(sid, sname) {
+  if (!user) return authBox($('#auth'), 'customer', () => location.reload());
+  const draw = async () => { const { data = [] } = await sb.from('messages').select('*').eq('shop_id', sid).eq('customer', user.id).order('created_at'); if (!$('#cl')) return;
+    $('#cl').innerHTML = data.map(m => `<div style="text-align:${m.sender === user.id ? 'right' : 'left'}"><div style="display:inline-block;padding:6px 10px;margin:2px 0;border-radius:12px;background:${m.sender === user.id ? '#0b6b3a' : '#eee'};color:${m.sender === user.id ? '#fff' : '#222'}">${esc(m.body)}</div></div>`).join('') || '<p>Say hello 👋</p>'; };
+  $('#main').innerHTML = `<button onclick=location.reload()>←</button><h3>💬 ${esc(sname)}</h3><div id=cl></div><div class=tabs><input id=cm placeholder="Type a message" style="flex:1"><button id=cs>Send</button></div>`;
+  draw(); const iv = setInterval(() => $('#cl') ? draw() : clearInterval(iv), 8000);
+  $('#cs').onclick = async () => { const v = $('#cm').value.trim(); if (!v) return; $('#cm').value = ''; await sb.from('messages').insert({ customer: user.id, shop_id: sid, sender: user.id, body: v, cname: user.name }); draw(); };
+}
 async function showHelp() {
   if (!user) return authBox($('#auth'), 'customer', () => location.reload());
   const { data = [] } = await sb.from('tickets').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
@@ -92,9 +100,9 @@ function addCart(p, v) { const i = cart.find(x => x.id === p.id && x.v === v); i
 function track(s) { if (s === 'cancelled') return '❌ Cancelled'; if (s === 'awaiting_customer') return '⏳ Waiting for your confirmation'; const i = ['pending', 'accepted', 'shipped', 'delivered'].indexOf(s); return ['Ordered', 'Accepted', 'Shipped', 'Delivered'].map((x, k) => (k <= i ? '🟢 ' : '⚪ ') + x).join(' → '); }
 function detail(id) {
   const p = PR.find(x => x.id === id); if (!p) return; const n = (p.shops.phone || '').replace(/\D/g, ''), wa = n.startsWith('0') ? '88' + n : n, liked = wish.includes(id);
-  $('#main').innerHTML = `<button id=bk>←</button>${p.image_url ? `<img src="${esc(p.image_url)}" style="width:100%;border-radius:12px;margin-top:8px">` : ''}<h3>${esc(p.name)}</h3>${p.options ? `<select id=vr>${p.options.split(',').map(o => `<option>${esc(o.trim())}</option>`).join('')}</select>` : ''}<div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s>` : ''}</div><p>${esc(p.description)}</p><p>🏪 ${esc(p.shops.name)}</p>
-  <div class=tabs>${p.in_stock ? '<button id=da>🛒 Add to cart</button>' : '<b style=color:#d62828>Sold out</b>'}<button id=dw>${liked ? '💔 Remove' : '❤️ Wishlist'}</button>${n ? `<a href="tel:${esc(p.shops.phone)}"><button>📞 Call</button></a><a href="https://wa.me/${wa}" target=_blank><button>💬 WhatsApp</button></a>` : ''}<button id=ds>🔗 Share</button><button id=dr>★ Reviews</button></div>`;
-  $('#bk').onclick = load; $('#dr').onclick = () => reviews(id);
+  $('#main').innerHTML = `<button id=bk>←</button>${p.image_url ? `<img id=gi src="${esc(p.image_url)}" style="width:100%;border-radius:12px;margin-top:8px">` : ''}${(p.images || []).length ? `<div style="display:flex;gap:6px;overflow-x:auto;margin:6px 0">${[p.image_url, ...p.images].filter(Boolean).map(u => `<img data-gi="${esc(u)}" src="${esc(u)}" style="height:56px;border-radius:8px;cursor:pointer">`).join('')}</div>` : ''}<h3>${esc(p.name)}</h3>${p.options ? `<select id=vr>${p.options.split(',').map(o => `<option>${esc(o.trim())}</option>`).join('')}</select>` : ''}<div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s>` : ''}</div><p>${esc(p.description)}</p><p>🏪 ${esc(p.shops.name)}</p>
+  <div class=tabs>${p.in_stock ? '<button id=da>🛒 Add to cart</button>' : '<b style=color:#d62828>Sold out</b>'}<button id=dw>${liked ? '💔 Remove' : '❤️ Wishlist'}</button>${n ? `<a href="tel:${esc(p.shops.phone)}"><button>📞 Call</button></a><a href="https://wa.me/${wa}" target=_blank><button>💬 WhatsApp</button></a>` : ''}<button id=dc>💬 Chat with shop</button><button id=ds>🔗 Share</button><button id=dr>★ Reviews</button></div>`;
+  $('#bk').onclick = load; $('#dc').onclick = () => showChat(p.shop_id, p.shops.name); document.querySelectorAll('[data-gi]').forEach(i => i.onclick = () => { $('#gi').src = i.dataset.gi; }); $('#dr').onclick = () => reviews(id);
   if ($('#da')) $('#da').onclick = () => { addCart(p, $('#vr') ? $('#vr').value : null); $('#da').textContent = '✓ Added'; };
   $('#dw').onclick = () => { wish = liked ? wish.filter(x => x !== id) : [...wish, id]; localStorage.wish = JSON.stringify(wish); detail(id); };
   $('#ds').onclick = () => { const u = location.origin + location.pathname; navigator.share ? navigator.share({ title: p.name, url: u }) : (navigator.clipboard?.writeText(u), alert('Link copied')); };
@@ -106,26 +114,30 @@ async function showWish() {
 }
 function tabsHtml() { return `<div class=tabs>${cat ? `<button id=cc>✕ ${esc(cat)}</button>` : ''}${['local', 'all', 'offers', 'flash'].map(x => `<button data-t=${x} class="${x === tab ? 'on' : ''}">${t(x)}</button>`).join('')}</div>`; }
 async function load() {
-  const key = [tab, cat, q, area, upz].join('|'); if (key !== lastKey) { limit = 24; lastKey = key; }
+  const key = [tab, cat, q, area, upz, shopF].join('|'); if (key !== lastKey) { limit = 24; lastKey = key; }
   let qq = sb.from('products').select('*, shops!inner(name,area,verified,phone,is_open,open_time,close_time,featured_until)').eq('shops.verified', true).eq('shops.is_open', true);
   if (tab === 'local') { qq = qq.eq('scope', 'local').eq('shops.area', area); if (upz) qq = qq.eq('shops.upazila', upz); }
   if (tab === 'all') qq = qq.eq('scope', 'all');
   if (tab === 'offers') qq = qq.not('offer_price', 'is', null);
   if (tab === 'flash') qq = qq.not('offer_ends', 'is', null).gt('offer_ends', new Date().toISOString());
   if (cat) qq = qq.eq('category', cat);
+  if (shopF) qq = qq.eq('shop_id', shopF);
   if (q) qq = qq.ilike('name', `%${q}%`);
   const { data: all = [] } = await qq.order('created_at', { ascending: false }).limit(limit); fixOffers(all); const feat = s => s.featured_until && new Date(s.featured_until) > new Date(); let data = all.filter(p => isOpenNow(p.shops) && (tab !== 'offers' || p.offer_price)).sort((a, b) => feat(b.shops) - feat(a.shops));
   { const pr = p => p.offer_price ?? p.price; if (pmin !== '') data = data.filter(p => pr(p) >= +pmin); if (pmax !== '') data = data.filter(p => pr(p) <= +pmax); if (sortBy === 'lo') data.sort((a, b) => pr(a) - pr(b)); if (sortBy === 'hi') data.sort((a, b) => pr(b) - pr(a)); }
   PR = data;
   const rt = {}; if (data.length) { const { data: rv = [] } = await sb.from('reviews').select('product_id,rating').in('product_id', data.map(p => p.id)); rv.forEach(r => { (rt[r.product_id] = rt[r.product_id] || []).push(r.rating); }); }
+  let strip = ''; if (tab === 'local') { let sq = sb.from('shops').select('id,name').eq('verified', true).eq('area', area).limit(12); if (upz) sq = sq.eq('upazila', upz); const { data: ns = [] } = await sq;
+    if (ns.length) strip = `<div style="font-size:13px;font-weight:700;color:#0b6b3a">📍 Shops near you</div><div class=tabs style="overflow-x:auto;flex-wrap:nowrap">${shopF ? '<button id=sx class=del>✕ Clear</button>' : ''}${ns.map(s => `<button data-sf=${s.id} style="background:${shopF === s.id ? '#0b6b3a' : '#fff'};color:${shopF === s.id ? '#fff' : '#0b6b3a'};border:1px solid #0b6b3a;white-space:nowrap">🏪 ${esc(s.name)}</button>`).join('')}</div>`; }
   const hero = (BANNER && !q && !cat) ? `<img class=hero src="${esc(BANNER)}" onerror="this.style.display='none'">` : '';
-  $('#main').innerHTML = hero + tabsHtml() + `<div class=tabs><select id=so style="width:auto;margin:0"><option value=new>Newest</option><option value=lo ${sortBy === 'lo' ? 'selected' : ''}>Price: low to high</option><option value=hi ${sortBy === 'hi' ? 'selected' : ''}>Price: high to low</option></select><input id=mn type=number placeholder="Min ৳" value="${pmin}" style="width:90px;margin:0"><input id=mx type=number placeholder="Max ৳" value="${pmax}" style="width:90px;margin:0"></div>` + `<div class=g>${data.map(p => { const pct = p.offer_price ? Math.round((1 - p.offer_price / p.price) * 100) : 0;
+  $('#main').innerHTML = hero + strip + tabsHtml() + `<div class=tabs><select id=so style="width:auto;margin:0"><option value=new>Newest</option><option value=lo ${sortBy === 'lo' ? 'selected' : ''}>Price: low to high</option><option value=hi ${sortBy === 'hi' ? 'selected' : ''}>Price: high to low</option></select><input id=mn type=number placeholder="Min ৳" value="${pmin}" style="width:90px;margin:0"><input id=mx type=number placeholder="Max ৳" value="${pmax}" style="width:90px;margin:0"></div>` + `<div class=g>${data.map(p => { const pct = p.offer_price ? Math.round((1 - p.offer_price / p.price) * 100) : 0;
     return `<div class=pc>${p.image_url ? `<img src="${esc(p.image_url)}">` : `<div class=ph>${esc((p.name || '?')[0])}</div>`}${p.in_stock ? '' : `<div class=so>${t('soldout')}</div>`}
     <div class=pb><div class=nm data-d='${p.id}'>${esc(p.name)}</div>${rt[p.id] ? `<div class=sh style="color:#e6a100">★ ${(rt[p.id].reduce((a, b) => a + b, 0) / rt[p.id].length).toFixed(1)} (${rt[p.id].length})</div>` : ''}<div class=sh>${feat(p.shops) ? '⭐ ' : ''}${esc(p.shops.name)}</div>${p.offer_price && p.offer_ends ? `<div class=sh style="color:#d62828">⏱ ${left(p.offer_ends)}</div>` : ''}
     <div class=pr>৳${p.offer_price ?? p.price}${p.offer_price ? ` <s>৳${p.price}</s><span class=off>${pct}% OFF</span>` : ''}</div>
     <div class=row><span class=rv data-r='${p.id}'>★ Reviews</span>${p.in_stock ? `<button class=add data-a='${p.id}'>🛒</button>` : ''}</div></div></div>`; }).join('') || '<p>No products here yet</p>'}</div>${all.length >= limit ? '<button id=lm style="width:100%;margin:10px 0">Load more</button>' : ''}`;
   if ($('#cc')) $('#cc').onclick = () => { cat = ''; load(); };
   $('#so').onchange = e => { sortBy = e.target.value; load(); }; $('#mn').onchange = e => { pmin = e.target.value; load(); }; $('#mx').onchange = e => { pmax = e.target.value; load(); };
+  document.querySelectorAll('[data-sf]').forEach(b => b.onclick = () => { shopF = b.dataset.sf; load(); }); if ($('#sx')) $('#sx').onclick = () => { shopF = ''; load(); };
   if ($('#lm')) $('#lm').onclick = () => { limit += 24; load(); };
   document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; load(); });
   document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const p = data.find(x => x.id === b.dataset.a);
