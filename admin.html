@@ -4,14 +4,17 @@
 import { brandHeader, sb, $, esc, me, authBox, getFees, css, upload, startNotifs, commOf } from './app.js';
 document.head.insertAdjacentHTML('beforeend', css);
 document.body.insertAdjacentHTML('afterbegin', brandHeader('Admin'));
-let tab = 'dash';
+let tab = 'dash', myId;
 async function init() {
   const u = await me(); if (!u) return authBox($('#auth'), 'customer', init);
   if (u.role !== 'admin') return $('#main').innerHTML = '<h3>Not an admin</h3>';
-  $('#auth').innerHTML = ''; startNotifs(u.id); load();
+  $('#auth').innerHTML = ''; myId = u.id; startNotifs(u.id); load();
 }
 async function load() {
   const [{ data: shops = [] }, { data: ords = [] }, { data: zones = [] }, { data: reps = [] }, fees, { data: pays = [] }, { data: info = [] }, { data: tix = [] }, { data: riders = [] }, { data: cats = [] }, { data: gcps = [] }, { data: profs = [] }] = await Promise.all([sb.from('shops').select('*').order('verified'), sb.from('orders').select('*').order('created_at', { ascending: false }), sb.from('delivery_zones').select('*'), sb.from('reviews').select('*').eq('reported', true), getFees(), sb.from('commission_payments').select('*').order('created_at', { ascending: false }), sb.from('site_info').select('*'), sb.from('tickets').select('*').order('created_at', { ascending: false }), sb.from('riders').select('*'), sb.from('categories').select('*').order('sort'), sb.from('coupons').select('*').is('shop_id', null), sb.from('profiles').select('*')]);
+  const { data: adm = [] } = await sb.rpc('list_admins');
+  const isOwner = adm.some(a => a.id === myId && a.is_owner);
+  const admCard = `<div class=c><h4>Admins</h4>${adm.map(a => `<div style="margin:6px 0">👤 ${esc(a.name || '')} <small>${esc(a.email)}</small>${a.is_owner ? ' <span class=pill>Main admin</span>' : ''}${a.id === myId ? ' <span class=pill>you</span>' : (isOwner ? ` <button class=del data-rma=${a.id}>Remove</button>` : '')}</div>`).join('')}${isOwner ? '<input id=ae type=email placeholder="New admin\'s email (they must sign up first)"><button id=aadd>Add admin</button>' : '<small>Only the main admin can add or remove admins.</small>'}</div>`;
   const I = Object.fromEntries(info.map(r => [r.key, r.value])), pct = fees.commission_percent || 0, name = id => esc(shops.find(s => s.id === id)?.name);
   const done = ords.filter(o => o.status === 'delivered'), sales = done.reduce((s, o) => s + o.subtotal - o.discount, 0), earned = Math.round(done.reduce((s, o) => s + commOf(o, fees), 0));
   const ok = pays.filter(p => p.status === 'confirmed'), got = ok.reduce((s, p) => s + +p.amount, 0);
@@ -24,7 +27,7 @@ async function load() {
   const an = `<div class=c><h4>Sales, last 7 days</h4>${days.map(x => `<div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:42px;font-size:12px">${x.l}</span><div style="background:#0e8a4b;height:14px;border-radius:4px;width:${Math.round(x.v / mx * 60)}%;min-width:2px"></div><span style="font-size:12px">৳${x.v}</span></div>`).join('')}</div><div class=c><h4>Top products</h4>${topP.map(p => `${esc(p[0])} — ${p[1]} sold`).join('<br>') || '-'}</div><div class=c><h4>Top shops</h4>${topS.map(r => `${esc(r.s.name)} — ৳${r.sl}`).join('<br>') || '-'}</div>`;
   let body = '';
   if (tab === 'dash') body = `<div class=stats><div class=hl><b>৳${sales}</b>Total sales</div><div class=hl><b>৳${earned}</b>Commission earned (${pct}%)</div><div><b>৳${got}</b>Commission received</div><div><b>৳${earned - got}</b>Commission due</div><div><b>${ords.length}</b>Orders</div><div><b>${shops.length}</b>Shops</div><div><b>${profs.length}</b>Users</div><div><b>${profs.filter(p => p.referred_by).length}</b>Referred users</div></div>${an}<h4>Commission due by shop</h4>${rows.map(r => `<div class=c><b>${esc(r.s.name)}</b><br>Sales ৳${r.sl} · <b style=color:#d62828>Due ৳${r.due}</b></div>`).join('') || '<p>No shops</p>'}`;
-  if (tab === 'users') body = profs.filter(p => p.role !== 'admin').map(p => { const mine = ords.filter(o => o.customer === p.id), can = mine.filter(o => o.status === 'cancelled').length;
+  if (tab === 'users') body = admCard + profs.filter(p => p.role !== 'admin').map(p => { const mine = ords.filter(o => o.customer === p.id), can = mine.filter(o => o.status === 'cancelled').length;
     return `<div class=c><b>${esc(p.name || 'No name')}</b>${p.blocked ? ' <span class=pill style="background:#fde;color:#d62828">BLOCKED</span>' : ''}${can >= 3 ? ' ⚠️' : ''}<br>Orders ${mine.length} · Cancelled ${can}<br><button class="${p.blocked ? '' : 'del'}" data-bk=${p.id} data-v=${p.blocked}>${p.blocked ? 'Unblock' : 'Block'}</button></div>`; }).join('') || '<p>No users</p>';
   if (tab === 'shops') body = shops.map(s => `<div class=c><b>${esc(s.name)}</b> <span class=pill>${s.verified ? 'Verified' : 'Pending'}</span>${s.women_owned ? ' <span class=pill>👩‍🍳 Women</span>' : ''} <button data-wo=${s.id} data-v=${s.women_owned}>${s.women_owned ? '✓ Women entrepreneur' : '＋ Women entrepreneur'}</button><br>${esc(s.area)}, ${esc(s.upazila)} · NID ${esc(s.nid_no)} · ${esc(s.phone)}<br><a href="${esc(s.photo_url)}" target=_blank>Owner photo</a> · <a href="${esc(s.signboard_url)}" target=_blank>Signboard</a><br>${s.verified ? `<button class=del data-bl=${s.id}>Block</button>` : `<button data-v=${s.id}>Verify</button>`}${s.verified ? `<button data-ft=${s.id}>⭐ Feature…</button>${s.featured_until && new Date(s.featured_until) > new Date() ? ' <span class=pill>Featured</span>' : ''}` : ''}</div>`).join('') || '<p>No shops</p>';
   if (tab === 'orders') body = '<button id=csv>⬇ Download all orders (CSV)</button>' + ords.slice(0, 40).map(o => `<div class=c><b>${name(o.shop_id)}</b> <span class=pill>${o.status}</span> <span class=pill>${o.pay_status || 'cod'}</span><br>৳${o.subtotal - o.discount + +o.delivery_fee} · ${esc(o.area)}, ${esc(o.upazila)} · ${new Date(o.created_at).toLocaleDateString()}<br><select data-as=${o.id}><option value="">Assign rider…</option>${riders.filter(r => r.active).map(r => `<option value=${r.id} ${r.id === o.rider_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></div>`).join('') || '<p>No orders</p>';
@@ -41,6 +44,8 @@ async function load() {
   const all = (s, fn) => document.querySelectorAll(s).forEach(fn), up = (t, id, u) => sb.from(t).update(u).eq('id', id).then(load);
   all('[data-bk]', b => b.onclick = () => up('profiles', b.dataset.bk, { blocked: b.dataset.v !== 'true' }));
   if ($('#bc')) $('#bc').onclick = async () => { if (!$('#bt').value.trim() || !$('#bm').value.trim()) return alert('Title and message required'); const { data, error } = await sb.rpc('broadcast', { t: $('#bt').value.trim(), b: $('#bm').value.trim() }); alert(error ? error.message : 'Sent to ' + data + ' users'); };
+  all('[data-rma]', b => b.onclick = async () => { if (!confirm('Remove this admin?')) return; const { error } = await sb.rpc('remove_admin', { p_id: b.dataset.rma }); error ? alert(error.message) : load(); });
+  if ($('#aadd')) $('#aadd').onclick = async () => { const e = $('#ae').value.trim(); if (!e) return; const { data, error } = await sb.rpc('make_admin', { p_email: e }); alert(error ? error.message : data === 'ok' ? 'Admin added' : data); load(); };
   all('[data-wo]', b => b.onclick = () => up('shops', b.dataset.wo, { women_owned: b.dataset.v !== 'true' }));
   all('[data-tab]', b => b.onclick = () => { tab = b.dataset.tab; load(); });
   all('[data-v]', b => b.onclick = () => up('shops', b.dataset.v, { verified: true })); all('[data-bl]', b => b.onclick = () => up('shops', b.dataset.bl, { verified: false }));
